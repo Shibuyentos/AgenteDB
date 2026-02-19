@@ -86,8 +86,8 @@ agentdb/
 ## Como funciona
 
 1. Voce pergunta em linguagem natural
-2. O AgentDB envia o schema do banco + sua pergunta pro GPT-4o
-3. O GPT-4o gera SQL otimizado
+2. O AgentDB envia o schema do banco + sua pergunta pro GPT-5 Codex
+3. O GPT-5 Codex gera SQL otimizado
 4. O AgentDB executa a query no seu banco (read-only por padrao)
 5. Os resultados sao resumidos e exibidos
 
