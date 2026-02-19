@@ -71,6 +71,9 @@ export function createConnectionRoutes(state: ServerState): Router {
 
       state.activeConnection = db;
       state.schemaEngine = new SchemaEngine(db);
+      // Resetar LLM e executor para que sejam re-inicializados com o novo schema
+      state.llmClient = null;
+      state.executor = null;
 
       const schema = await state.schemaEngine.mapDatabase();
 
@@ -92,6 +95,8 @@ export function createConnectionRoutes(state: ServerState): Router {
         await state.activeConnection.disconnect();
         state.activeConnection = null;
         state.schemaEngine = null;
+        state.llmClient = null;
+        state.executor = null;
       }
       res.json({ success: true });
     } catch (error) {

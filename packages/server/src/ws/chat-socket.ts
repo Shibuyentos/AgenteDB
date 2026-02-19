@@ -116,7 +116,8 @@ export function setupChatSocket(server: Server, state: ServerState): void {
             // Get summary from LLM
             if (result.rows.length > 0) {
               const rowsToSend = result.rows.slice(0, 20);
-              const summaryMsg = `Resultado da query (${result.rowCount} linhas, ${result.duration}ms):\n${JSON.stringify(rowsToSend, null, 2)}`;
+              const totalRows = result.rows.length;
+              const summaryMsg = `[Sistema] A query foi executada com sucesso e retornou ${totalRows} linha(s) em ${result.duration}ms. Aqui estão os dados:\n${JSON.stringify(rowsToSend, null, 2)}${totalRows > 20 ? `\n(mostrando 20 de ${totalRows} linhas)` : ''}`;
               try {
                 const summary = await state.llmClient.chat(summaryMsg);
                 send(ws, { type: 'summary', content: summary.content });

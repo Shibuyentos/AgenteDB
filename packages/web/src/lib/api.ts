@@ -55,6 +55,7 @@ export const api = {
   },
   query: {
     execute: (sql: string) => post<{ rows: any[]; rowCount: number; duration: number; columns: string[] }>('/query/execute', { sql }),
+    setReadOnly: (enabled: boolean) => post<{ readOnly: boolean }>('/query/read-only', { enabled }),
     history: () => get<any[]>('/query/history'),
     clearHistory: () => del<{ success: boolean }>('/query/history'),
   },
