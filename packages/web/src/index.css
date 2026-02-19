@@ -1,0 +1,46 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-brand: #10B981;
+    --color-brand-hover: #059669;
+    --color-accent: #06B6D4;
+    --color-bg-base: #09090B;
+    --color-bg-card: #18181B;
+    --color-bg-elevated: #27272A;
+    --color-border: #3F3F46;
+    --color-text-primary: #FAFAFA;
+    --color-text-secondary: #A1A1AA;
+    --color-text-muted: #71717A;
+    --color-error: #EF4444;
+    --color-warning: #F59E0B;
+    --color-success: #10B981;
+  }
+
+  body {
+    @apply bg-bg-base text-text-primary antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+
+/* Selection */
+::selection { background: rgba(16, 185, 129, 0.3); }
+
+/* Smooth transitions */
+* {
+  scrollbar-color: var(--color-border) transparent;
+}

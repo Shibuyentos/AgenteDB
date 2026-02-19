@@ -1,0 +1,18 @@
+{
+  "name": "agentdb",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "dev": "concurrently -n server,web -c cyan,green \"npm run dev -w @agentdb/server\" \"npm run dev -w @agentdb/web\"",
+    "dev:server": "npm run dev -w @agentdb/server",
+    "dev:web": "npm run dev -w @agentdb/web",
+    "dev:cli": "npm run dev -w @agentdb/cli",
+    "build": "npm run build -w @agentdb/core && npm run build -w @agentdb/server && npm run build -w @agentdb/web",
+    "start": "node packages/server/dist/index.js",
+    "cli": "tsx packages/cli/src/index.ts",
+    "preview": "npm run build && npm run start"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

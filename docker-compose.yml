@@ -1,0 +1,12 @@
+version: '3.8'
+services:
+  agentdb:
+    build: .
+    ports:
+      - "3001:3001"
+    volumes:
+      - agentdb-data:/root/.agentdb
+    restart: unless-stopped
+
+volumes:
+  agentdb-data:

@@ -1,0 +1,11 @@
+node_modules
+dist
+.env
+credentials.json
+*.js.map
+*.d.ts
+*.tsbuildinfo
+!tsconfig.json
+.agentdb/
+dev.stdout.log
+dev.stderr.log
