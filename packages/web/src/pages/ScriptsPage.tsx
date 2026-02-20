@@ -4,6 +4,8 @@ import {
   FileCode2, Search, Pencil, Check, X,
 } from 'lucide-react';
 import { Button, Badge, Table } from '../components/ui';
+import { SqlAutocomplete } from '../components/editor/SqlAutocomplete';
+import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
 import type { SqlScript, QueryResult } from '../types';
 
@@ -19,8 +21,11 @@ export function ScriptsPage() {
   const [search, setSearch] = useState('');
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState('');
+  const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const [cursorPos, setCursorPos] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const { schemaMap } = useAppStore();
 
   const selected = scripts.find(s => s.id === selectedId) || null;
 
@@ -113,7 +118,56 @@ export function ScriptsPage() {
     setEditingName(false);
   };
 
+  const handleAutocompleteSelect = useCallback((insertText: string, wordStart: number, wordEnd: number) => {
+    const newSql = sql.substring(0, wordStart) + insertText + sql.substring(wordEnd);
+    const newPos = wordStart + insertText.length;
+    setSql(newSql);
+    setDirty(true);
+    setShowAutocomplete(false);
+    setTimeout(() => {
+      const textarea = textareaRef.current;
+      if (textarea) {
+        textarea.selectionStart = textarea.selectionEnd = newPos;
+        textarea.focus();
+      }
+    }, 0);
+  }, [sql]);
+
+  const handleSqlChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newSql = e.target.value;
+    const newPos = e.target.selectionStart;
+    setSql(newSql);
+    setDirty(true);
+    setCursorPos(newPos);
+
+    // Show autocomplete when typing (not on delete to empty)
+    if (newSql.length > 0) {
+      // Check if last char is a letter, dot, or underscore
+      const charBefore = newSql[newPos - 1];
+      if (charBefore && /[a-zA-Z0-9_.]/.test(charBefore)) {
+        setShowAutocomplete(true);
+      } else if (charBefore === ' ') {
+        // Check if previous word is a context keyword (FROM, JOIN, etc.)
+        const textBefore = newSql.substring(0, newPos).trimEnd().toUpperCase();
+        const contextKeywords = ['FROM', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'FULL JOIN', 'INTO', 'UPDATE', 'TABLE', 'SELECT', 'WHERE', 'ON', 'AND', 'OR', 'BY', 'SET', 'HAVING'];
+        if (contextKeywords.some(kw => textBefore.endsWith(kw))) {
+          setShowAutocomplete(true);
+        } else {
+          setShowAutocomplete(false);
+        }
+      } else {
+        setShowAutocomplete(false);
+      }
+    } else {
+      setShowAutocomplete(false);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Don't intercept keys when autocomplete handles them
+    if (showAutocomplete && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab' || e.key === 'Escape')) {
+      return; // Let autocomplete handle these
+    }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       handleExecute();
@@ -284,12 +338,13 @@ export function ScriptsPage() {
             </div>
 
             {/* Textarea */}
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden relative">
               <textarea
                 ref={textareaRef}
                 value={sql}
-                onChange={(e) => { setSql(e.target.value); setDirty(true); }}
+                onChange={handleSqlChange}
                 onKeyDown={handleKeyDown}
+                onClick={(e) => setCursorPos((e.target as HTMLTextAreaElement).selectionStart)}
                 placeholder="SELECT * FROM ..."
                 spellCheck={false}
                 className="
@@ -297,6 +352,15 @@ export function ScriptsPage() {
                   font-mono text-sm text-text-primary placeholder:text-text-muted
                   resize-none focus:outline-none
                 "
+              />
+              <SqlAutocomplete
+                sql={sql}
+                cursorPos={cursorPos}
+                textareaRef={textareaRef}
+                schemaMap={schemaMap}
+                visible={showAutocomplete}
+                onSelect={handleAutocompleteSelect}
+                onClose={() => setShowAutocomplete(false)}
               />
             </div>
 

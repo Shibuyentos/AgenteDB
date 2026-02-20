@@ -66,6 +66,21 @@ export function setupChatSocket(server: Server, state: ServerState): void {
         // 2. Chat with LLM
         const response = await state.llmClient.chat(data.content);
 
+        if (!response || !response.content) {
+          send(ws, { type: 'error', content: 'Resposta vazia do LLM.' });
+          return;
+        }
+
+        // Re-check executor (may have been cleared during LLM call)
+        if (!state.executor) {
+          if (state.activeConnection) {
+            state.executor = new QueryExecutor(state.activeConnection);
+          } else {
+            send(ws, { type: 'text', content: response.content });
+            return;
+          }
+        }
+
         // 3. Check for SQL
         const sql = state.executor.extractSQL(response.content);
 
