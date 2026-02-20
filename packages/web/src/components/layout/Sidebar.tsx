@@ -2,18 +2,19 @@ import { useState, useEffect } from 'react';
 import {
   PlugZap, TableProperties, History, ChevronLeft, ChevronRight,
   Plus, Plug, Trash2, Table2, Eye, Search, Play, Copy,
-  MoreHorizontal, Loader2,
+  MoreHorizontal, Loader2, FileCode2,
 } from 'lucide-react';
 import { useAppStore, type SidebarTab } from '../../stores/app-store';
 import { api } from '../../lib/api';
 import { Badge, Input } from '../ui';
 import { ConnectionModal } from '../modals/ConnectionModal';
-import type { QueryHistoryEntry, TableSummary } from '../../types';
+import type { QueryHistoryEntry, TableSummary, SqlScript } from '../../types';
 
 const tabs: { id: SidebarTab; icon: React.ReactNode; label: string }[] = [
   { id: 'connections', icon: <PlugZap className="w-5 h-5" />, label: 'Conexões' },
   { id: 'schema', icon: <TableProperties className="w-5 h-5" />, label: 'Schema' },
   { id: 'history', icon: <History className="w-5 h-5" />, label: 'Histórico' },
+  { id: 'scripts', icon: <FileCode2 className="w-5 h-5" />, label: 'Scripts' },
 ];
 
 export function Sidebar() {
@@ -22,13 +23,14 @@ export function Sidebar() {
     activeConnection, schemaMap, toggleSidebar, setSidebarTab,
     setConnections, addConnection: addConn, removeConnection: removeConn,
     setActiveConnection, setConnectionStatus, setDbInfo,
-    setSchemaMap, setIsLoadingSchema, selectTable,
+    setSchemaMap, setIsLoadingSchema, selectTable, setActivePage,
   } = useAppStore();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [connectingName, setConnectingName] = useState<string | null>(null);
   const [schemaSearch, setSchemaSearch] = useState('');
   const [history, setHistory] = useState<QueryHistoryEntry[]>([]);
+  const [scriptsList, setScriptsList] = useState<SqlScript[]>([]);
 
   // Load connections on mount
   useEffect(() => {
@@ -42,6 +44,9 @@ export function Sidebar() {
   useEffect(() => {
     if (sidebarTab === 'history') {
       api.query.history().then(setHistory).catch(console.error);
+    }
+    if (sidebarTab === 'scripts') {
+      api.scripts.list().then(setScriptsList).catch(console.error);
     }
   }, [sidebarTab]);
 
@@ -285,6 +290,47 @@ export function Sidebar() {
                           </button>
                         </div>
                       </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ─── Scripts Tab ─── */}
+            {sidebarTab === 'scripts' && (
+              <div className="flex flex-col h-full">
+                <div className="flex items-center justify-between px-3 py-2.5 border-b border-border/50">
+                  <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+                    Scripts
+                  </span>
+                  <button
+                    onClick={() => setActivePage('scripts')}
+                    className="text-xs text-text-muted hover:text-brand transition-colors cursor-pointer"
+                  >
+                    Abrir editor
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto py-1">
+                  {scriptsList.length === 0 ? (
+                    <div className="px-3 py-8 text-center text-text-muted text-xs">
+                      Nenhum script salvo.
+                    </div>
+                  ) : (
+                    scriptsList.map(script => (
+                      <button
+                        key={script.id}
+                        onClick={() => setActivePage('scripts')}
+                        className="flex items-center gap-2 w-full px-3 py-2 mx-1 rounded-md hover:bg-bg-elevated transition-colors cursor-pointer text-left"
+                      >
+                        <FileCode2 className="w-3.5 h-3.5 text-text-muted shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-text-primary truncate">{script.name}</div>
+                          <div className="text-[10px] text-text-muted truncate font-mono">
+                            {script.sql ? script.sql.substring(0, 50) : 'Vazio'}
+                          </div>
+                        </div>
+                      </button>
                     ))
                   )}
                 </div>

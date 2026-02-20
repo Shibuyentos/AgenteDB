@@ -2,8 +2,8 @@ import { create } from 'zustand';
 import type { Connection, SchemaMap, TableInfo } from '../types';
 import { api } from '../lib/api';
 
-export type SidebarTab = 'connections' | 'schema' | 'history';
-export type ActivePage = 'chat' | 'query-editor' | 'table-detail';
+export type SidebarTab = 'connections' | 'schema' | 'history' | 'scripts';
+export type ActivePage = 'chat' | 'query-editor' | 'table-detail' | 'scripts';
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 interface AppState {

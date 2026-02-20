@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, Table2, Zap, MessageSquare, PlugZap, Lock } from 'lucide-react';
+import { Search, Table2, Zap, MessageSquare, PlugZap, Lock, FileCode2 } from 'lucide-react';
 import { useAppStore } from '../../stores/app-store';
 
 interface CommandItem {
@@ -55,6 +55,13 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
       icon: <Zap className="w-4 h-4 text-text-muted" />,
       category: 'command',
       action: () => { setActivePage('query-editor'); onClose(); },
+    });
+    result.push({
+      id: 'cmd-scripts',
+      label: 'Abrir Scripts SQL',
+      icon: <FileCode2 className="w-4 h-4 text-text-muted" />,
+      category: 'command',
+      action: () => { setActivePage('scripts'); onClose(); },
     });
     result.push({
       id: 'cmd-connection',

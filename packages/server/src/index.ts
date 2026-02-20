@@ -16,6 +16,7 @@ import { createConnectionRoutes } from './routes/connections.js';
 import { createSchemaRoutes } from './routes/schema.js';
 import { createQueryRoutes } from './routes/query.js';
 import { createChatRoutes } from './routes/chat.js';
+import { createScriptRoutes } from './routes/scripts.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { setupChatSocket } from './ws/chat-socket.js';
 
@@ -77,6 +78,7 @@ app.use('/api/connections', createConnectionRoutes(state));
 app.use('/api/schema', createSchemaRoutes(state));
 app.use('/api/query', createQueryRoutes(state));
 app.use('/api/chat', createChatRoutes(state));
+app.use('/api/scripts', createScriptRoutes());
 
 // Health
 app.get('/api/health', (_req, res) => {
