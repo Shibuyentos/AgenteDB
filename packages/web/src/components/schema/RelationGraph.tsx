@@ -45,7 +45,17 @@ export function RelationGraph({ isOpen, onClose }: RelationGraphProps) {
   // Camera state
   const cameraRef = useRef({ x: 0, y: 0, zoom: 1 });
   const dragRef = useRef<{ type: 'pan' | 'node'; nodeIdx: number; startX: number; startY: number; origX: number; origY: number } | null>(null);
-  const [hoveredNode, setHoveredNode] = useState<number>(-1);
+  // hoveredNode as ref to avoid React re-renders on every mousemove
+  const hoveredNodeRef = useRef<number>(-1);
+  // Refs for values needed inside draw without causing re-renders
+  const activeSchemasRef = useRef<Set<string>>(new Set());
+  const searchRef = useRef('');
+  // Keep refs in sync
+  activeSchemasRef.current = activeSchemas;
+  searchRef.current = search;
+
+  // Canvas size cache to avoid setting width/height every frame
+  const canvasSizeRef = useRef({ w: 0, h: 0 });
 
   // Load data
   useEffect(() => {
@@ -160,6 +170,7 @@ export function RelationGraph({ isOpen, onClose }: RelationGraphProps) {
     step();
   }, []);
 
+  // draw reads from refs, so no React dependencies needed — stable function
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -167,11 +178,24 @@ export function RelationGraph({ isOpen, onClose }: RelationGraphProps) {
     if (!ctx) return;
 
     const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * window.devicePixelRatio;
-    canvas.height = rect.height * window.devicePixelRatio;
-    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    const dpr = window.devicePixelRatio;
+    const targetW = Math.round(rect.width * dpr);
+    const targetH = Math.round(rect.height * dpr);
+
+    // Only resize canvas when dimensions actually change (avoids expensive clear)
+    if (canvasSizeRef.current.w !== targetW || canvasSizeRef.current.h !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+      canvasSizeRef.current = { w: targetW, h: targetH };
+    }
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     const cam = cameraRef.current;
+    const hoveredNode = hoveredNodeRef.current;
+    const currentActiveSchemas = activeSchemasRef.current;
+    const currentSearch = searchRef.current;
+
     ctx.clearRect(0, 0, rect.width, rect.height);
     ctx.save();
     ctx.translate(rect.width / 2, rect.height / 2);
@@ -184,7 +208,7 @@ export function RelationGraph({ isOpen, onClose }: RelationGraphProps) {
 
     // Filter by active schemas
     const visibleIds = new Set(
-      nodes.filter(n => activeSchemas.has(n.schema)).map(n => n.id)
+      nodes.filter(n => currentActiveSchemas.has(n.schema)).map(n => n.id)
     );
 
     // Draw edges
@@ -230,7 +254,7 @@ export function RelationGraph({ isOpen, onClose }: RelationGraphProps) {
     nodes.forEach((node, i) => {
       if (!visibleIds.has(node.id)) return;
       const isHovered = i === hoveredNode;
-      const isSearchMatch = search && node.label.toLowerCase().includes(search.toLowerCase());
+      const isSearchMatch = currentSearch && node.label.toLowerCase().includes(currentSearch.toLowerCase());
       const color = getSchemaColor(node.schema);
 
       const x = node.x - node.width / 2;
@@ -310,7 +334,7 @@ export function RelationGraph({ isOpen, onClose }: RelationGraphProps) {
       ctx.lineWidth = 1;
       ctx.strokeRect(vpX, vpY, vpW, vpH);
     }
-  }, [hoveredNode, activeSchemas, search]);
+  }, []);
 
   // Mouse handlers
   const getWorldPos = useCallback((clientX: number, clientY: number) => {
@@ -326,16 +350,17 @@ export function RelationGraph({ isOpen, onClose }: RelationGraphProps) {
 
   const findNodeAt = useCallback((wx: number, wy: number): number => {
     const nodes = nodesRef.current;
+    const currentActiveSchemas = activeSchemasRef.current;
     for (let i = nodes.length - 1; i >= 0; i--) {
       const n = nodes[i];
-      if (!activeSchemas.has(n.schema)) continue;
+      if (!currentActiveSchemas.has(n.schema)) continue;
       if (wx >= n.x - n.width / 2 && wx <= n.x + n.width / 2 &&
           wy >= n.y - n.height / 2 && wy <= n.y + n.height / 2) {
         return i;
       }
     }
     return -1;
-  }, [activeSchemas]);
+  }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     const { worldX, worldY } = getWorldPos(e.clientX, e.clientY);
@@ -369,11 +394,12 @@ export function RelationGraph({ isOpen, onClose }: RelationGraphProps) {
     } else {
       const { worldX, worldY } = getWorldPos(e.clientX, e.clientY);
       const idx = findNodeAt(worldX, worldY);
-      if (idx !== hoveredNode) {
-        setHoveredNode(idx);
+      if (idx !== hoveredNodeRef.current) {
+        hoveredNodeRef.current = idx;
+        draw(); // redraw canvas only, no React re-render
       }
     }
-  }, [getWorldPos, findNodeAt, hoveredNode, draw]);
+  }, [getWorldPos, findNodeAt, draw]);
 
   const handleMouseUp = useCallback(() => {
     if (dragRef.current?.type === 'node') {
@@ -405,10 +431,11 @@ export function RelationGraph({ isOpen, onClose }: RelationGraphProps) {
 
     // Center on nodes
     const nodes = nodesRef.current;
+    const currentActiveSchemas = activeSchemasRef.current;
     if (nodes.length > 0) {
       let sumX = 0, sumY = 0, count = 0;
       for (const n of nodes) {
-        if (activeSchemas.has(n.schema)) {
+        if (currentActiveSchemas.has(n.schema)) {
           sumX += n.x;
           sumY += n.y;
           count++;
@@ -420,7 +447,7 @@ export function RelationGraph({ isOpen, onClose }: RelationGraphProps) {
       }
     }
     draw();
-  }, [activeSchemas, draw]);
+  }, [draw]);
 
   const toggleSchema = (schema: string) => {
     setActiveSchemas(prev => {

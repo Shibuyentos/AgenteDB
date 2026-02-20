@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   PlugZap, TableProperties, History, ChevronLeft, ChevronRight,
   Plus, Plug, Trash2, Table2, Eye, Search, Play, Copy,
@@ -18,13 +18,24 @@ const tabs: { id: SidebarTab; icon: React.ReactNode; label: string }[] = [
 ];
 
 export function Sidebar() {
-  const {
-    sidebarOpen, sidebarTab, connectionStatus, connections,
-    activeConnection, schemaMap, toggleSidebar, setSidebarTab,
-    setConnections, addConnection: addConn, removeConnection: removeConn,
-    setActiveConnection, setConnectionStatus, setDbInfo,
-    setSchemaMap, setIsLoadingSchema, selectTable, setActivePage,
-  } = useAppStore();
+  const sidebarOpen = useAppStore((s) => s.sidebarOpen);
+  const sidebarTab = useAppStore((s) => s.sidebarTab);
+  const connectionStatus = useAppStore((s) => s.connectionStatus);
+  const connections = useAppStore((s) => s.connections);
+  const activeConnection = useAppStore((s) => s.activeConnection);
+  const schemaMap = useAppStore((s) => s.schemaMap);
+  const toggleSidebar = useAppStore((s) => s.toggleSidebar);
+  const setSidebarTab = useAppStore((s) => s.setSidebarTab);
+  const setConnections = useAppStore((s) => s.setConnections);
+  const addConn = useAppStore((s) => s.addConnection);
+  const removeConn = useAppStore((s) => s.removeConnection);
+  const setActiveConnection = useAppStore((s) => s.setActiveConnection);
+  const setConnectionStatus = useAppStore((s) => s.setConnectionStatus);
+  const setDbInfo = useAppStore((s) => s.setDbInfo);
+  const setSchemaMap = useAppStore((s) => s.setSchemaMap);
+  const setIsLoadingSchema = useAppStore((s) => s.setIsLoadingSchema);
+  const selectTable = useAppStore((s) => s.selectTable);
+  const setActivePage = useAppStore((s) => s.setActivePage);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [connectingName, setConnectingName] = useState<string | null>(null);
@@ -86,19 +97,20 @@ export function Sidebar() {
     }
   };
 
-  // ─── Schema Tree ───
-  const schemaGroups = schemaMap
-    ? schemaMap.schemas.map(schema => {
-        const schemaTables = schemaMap.tables
-          .filter(t => t.schema === schema)
-          .filter(t =>
-            !schemaSearch || t.name.toLowerCase().includes(schemaSearch.toLowerCase())
-          );
-        const tablesOnly = schemaTables.filter(t => t.type === 'table');
-        const viewsOnly = schemaTables.filter(t => t.type === 'view');
-        return { schema, tables: tablesOnly, views: viewsOnly };
-      }).filter(g => g.tables.length > 0 || g.views.length > 0)
-    : [];
+  // ─── Schema Tree (memoized) ───
+  const schemaGroups = useMemo(() => {
+    if (!schemaMap) return [];
+    return schemaMap.schemas.map(schema => {
+      const schemaTables = schemaMap.tables
+        .filter(t => t.schema === schema)
+        .filter(t =>
+          !schemaSearch || t.name.toLowerCase().includes(schemaSearch.toLowerCase())
+        );
+      const tablesOnly = schemaTables.filter(t => t.type === 'table');
+      const viewsOnly = schemaTables.filter(t => t.type === 'view');
+      return { schema, tables: tablesOnly, views: viewsOnly };
+    }).filter(g => g.tables.length > 0 || g.views.length > 0);
+  }, [schemaMap, schemaSearch]);
 
   return (
     <>

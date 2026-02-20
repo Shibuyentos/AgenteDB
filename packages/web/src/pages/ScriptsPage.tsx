@@ -25,7 +25,7 @@ export function ScriptsPage() {
   const [cursorPos, setCursorPos] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
-  const { schemaMap } = useAppStore();
+  const schemaMap = useAppStore((s) => s.schemaMap);
 
   const selected = scripts.find(s => s.id === selectedId) || null;
 

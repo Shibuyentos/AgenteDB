@@ -19,7 +19,9 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { schemaMap, setActivePage, selectTable } = useAppStore();
+  const schemaMap = useAppStore((s) => s.schemaMap);
+  const setActivePage = useAppStore((s) => s.setActivePage);
+  const selectTable = useAppStore((s) => s.selectTable);
 
   // Build items list
   const items = useMemo<CommandItem[]>(() => {

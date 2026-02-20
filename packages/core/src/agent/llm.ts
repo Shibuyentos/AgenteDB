@@ -1,6 +1,6 @@
 import * as https from 'https';
 import { spawn } from 'child_process';
-import type { IncomingHttpHeaders } from 'http';
+import type { IncomingHttpHeaders, IncomingMessage } from 'http';
 import { OpenAIAuth } from '../auth/oauth.js';
 import { getAuth } from '../utils/config.js';
 
@@ -22,11 +22,15 @@ export interface LLMResponse {
 
 // ─── Helpers ───
 
-function httpsRequest(
+/**
+ * Makes an HTTPS request and returns the raw response stream.
+ * Does NOT buffer the response — caller handles the stream.
+ */
+function httpsRequestRaw(
   url: string,
   options: https.RequestOptions,
   body: string
-): Promise<{ statusCode: number; data: string; headers: IncomingHttpHeaders }> {
+): Promise<{ statusCode: number; stream: IncomingMessage; headers: IncomingHttpHeaders }> {
   return new Promise((resolve, reject) => {
     const urlObj = new URL(url);
     const reqOptions: https.RequestOptions = {
@@ -38,13 +42,7 @@ function httpsRequest(
     };
 
     const req = https.request(reqOptions, (res) => {
-      let data = '';
-      res.on('data', (chunk: Buffer) => {
-        data += chunk.toString();
-      });
-      res.on('end', () => {
-        resolve({ statusCode: res.statusCode ?? 0, data, headers: res.headers });
-      });
+      resolve({ statusCode: res.statusCode ?? 0, stream: res, headers: res.headers });
     });
 
     req.on('error', reject);
@@ -55,6 +53,109 @@ function httpsRequest(
 
     req.write(body);
     req.end();
+  });
+}
+
+/**
+ * Read a small response body (for error responses).
+ */
+function readBody(stream: IncomingMessage, maxBytes = 8192): Promise<string> {
+  return new Promise((resolve) => {
+    let data = '';
+    let bytes = 0;
+    stream.on('data', (chunk: Buffer) => {
+      bytes += chunk.length;
+      if (bytes <= maxBytes) {
+        data += chunk.toString();
+      }
+    });
+    stream.on('end', () => resolve(data));
+    stream.on('error', () => resolve(data));
+  });
+}
+
+/**
+ * Parse SSE stream incrementally — only accumulates text content.
+ * Reasoning tokens and other large payloads are discarded immediately.
+ */
+function parseSSEStream(
+  stream: IncomingMessage,
+  onDelta?: (text: string) => void
+): Promise<{ content: string; usage: { input: number; output: number; total: number } }> {
+  return new Promise((resolve, reject) => {
+    let content = '';
+    let usage = { input: 0, output: 0, total: 0 };
+    let buffer = '';
+
+    stream.on('data', (chunk: Buffer) => {
+      buffer += chunk.toString();
+
+      // Process complete SSE lines
+      let newlineIdx: number;
+      while ((newlineIdx = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.substring(0, newlineIdx).trimEnd();
+        buffer = buffer.substring(newlineIdx + 1);
+
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.substring(6).trim();
+        if (!jsonStr || jsonStr === '[DONE]') continue;
+
+        try {
+          const event = JSON.parse(jsonStr) as Record<string, unknown>;
+          const eventType = event.type as string | undefined;
+
+          // Collect text deltas incrementally
+          if (eventType === 'response.output_text.delta' && typeof event.delta === 'string') {
+            content += event.delta;
+            if (onDelta) onDelta(event.delta);
+          }
+
+          // On response.completed, extract final text and usage (overrides deltas)
+          if (eventType === 'response.completed' || eventType === 'response.done') {
+            const response = event.response as Record<string, unknown> | undefined;
+            if (response) {
+              // Extract final text
+              const output = response.output as Array<Record<string, unknown>> | undefined;
+              if (output) {
+                for (const item of output) {
+                  if (item.type === 'message' && item.role === 'assistant') {
+                    const contentArr = item.content as Array<Record<string, unknown>> | undefined;
+                    if (contentArr) {
+                      for (const part of contentArr) {
+                        if (part.type === 'output_text' && typeof part.text === 'string') {
+                          content = part.text; // final authoritative text
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              // Extract usage
+              const usageData = response.usage as Record<string, number> | undefined;
+              if (usageData) {
+                usage = {
+                  input: usageData.input_tokens ?? 0,
+                  output: usageData.output_tokens ?? 0,
+                  total: usageData.total_tokens ?? (usageData.input_tokens ?? 0) + (usageData.output_tokens ?? 0),
+                };
+              }
+            }
+          }
+
+          // All other event types (reasoning, etc.) are discarded — not accumulated
+        } catch {
+          // Ignore malformed SSE lines
+        }
+      }
+    });
+
+    stream.on('end', () => {
+      resolve({ content, usage });
+    });
+
+    stream.on('error', (err) => {
+      reject(err);
+    });
   });
 }
 
@@ -86,7 +187,7 @@ interface ResponsesInputItem {
 function convertToResponsesInput(messages: LLMMessage[]): ResponsesInputItem[] {
   const input: ResponsesInputItem[] = [];
   for (const msg of messages) {
-    if (msg.role === 'system') continue; // system vai em "instructions"
+    if (msg.role === 'system') continue;
     input.push({
       type: 'message',
       role: msg.role === 'user' ? 'user' : 'assistant',
@@ -97,78 +198,6 @@ function convertToResponsesInput(messages: LLMMessage[]): ResponsesInputItem[] {
     });
   }
   return input;
-}
-
-function extractTextFromSSE(sseData: string): { content: string; usage: { input: number; output: number; total: number } } {
-  let content = '';
-  let usage = { input: 0, output: 0, total: 0 };
-
-  for (const line of sseData.split('\n')) {
-    if (!line.startsWith('data: ')) continue;
-    const jsonStr = line.substring(6).trim();
-    if (!jsonStr || jsonStr === '[DONE]') continue;
-
-    try {
-      const event = JSON.parse(jsonStr) as Record<string, unknown>;
-      const eventType = event.type as string | undefined;
-
-      // Coleta texto completo do evento response.completed
-      if (eventType === 'response.completed' || eventType === 'response.done') {
-        const response = event.response as Record<string, unknown> | undefined;
-        if (response) {
-          const output = response.output as Array<Record<string, unknown>> | undefined;
-          if (output) {
-            for (const item of output) {
-              if (item.type === 'message' && item.role === 'assistant') {
-                const contentArr = item.content as Array<Record<string, unknown>> | undefined;
-                if (contentArr) {
-                  for (const part of contentArr) {
-                    if (part.type === 'output_text' && typeof part.text === 'string') {
-                      content = part.text;
-                    }
-                  }
-                }
-              }
-            }
-          }
-          const usageData = response.usage as Record<string, number> | undefined;
-          if (usageData) {
-            usage = {
-              input: usageData.input_tokens ?? 0,
-              output: usageData.output_tokens ?? 0,
-              total: usageData.total_tokens ?? (usageData.input_tokens ?? 0) + (usageData.output_tokens ?? 0),
-            };
-          }
-        }
-      }
-
-      // Fallback: coleta deltas incrementais caso response.completed não tenha o texto
-      if (eventType === 'response.output_text.delta' && !content) {
-        // Não usamos deltas se já temos o texto completo
-      }
-    } catch {
-      // Ignora linhas SSE que não são JSON válido
-    }
-  }
-
-  // Fallback: se response.completed não tinha texto, concatena os deltas
-  if (!content) {
-    for (const line of sseData.split('\n')) {
-      if (!line.startsWith('data: ')) continue;
-      const jsonStr = line.substring(6).trim();
-      if (!jsonStr || jsonStr === '[DONE]') continue;
-      try {
-        const event = JSON.parse(jsonStr) as Record<string, unknown>;
-        if (event.type === 'response.output_text.delta' && typeof event.delta === 'string') {
-          content += event.delta;
-        }
-      } catch {
-        // ignore
-      }
-    }
-  }
-
-  return { content, usage };
 }
 
 export class LLMClient {
@@ -184,10 +213,10 @@ export class LLMClient {
     this.systemPrompt = prompt;
   }
 
-  async chat(userMessage: string): Promise<LLMResponse> {
+  async chat(userMessage: string, onDelta?: (text: string) => void): Promise<LLMResponse> {
     this.conversationHistory.push({ role: 'user', content: userMessage });
     this.trimHistory();
-    return this.doChat(false);
+    return this.doChat(false, onDelta);
   }
 
   clearHistory(): void {
@@ -205,19 +234,15 @@ export class LLMClient {
 
   private async runLocalCodex(messages: LLMMessage[]): Promise<LLMResponse> {
     const cmd = process.env.CODEX_CLI_CMD || 'codex';
-    
-    // Converte o histórico de mensagens em um prompt único
+
     const prompt = messages.map(m => {
       const roleMap: Record<string, string> = { system: 'System', user: 'User', assistant: 'Assistant' };
       return `${roleMap[m.role] || m.role}: ${m.content}`;
     }).join('\n\n') + '\n\nAssistant:';
 
     return new Promise((resolve, reject) => {
-      // Executa o CLI com flags para evitar interatividade e limpar a saída
-      // --no-alt-screen: evita sequências de terminal complexas
-      // --dangerously-bypass-approvals-and-sandbox: permite execução direta sem prompts (seguro pois o usuário autorizou)
       const args = ['--no-alt-screen', '--dangerously-bypass-approvals-and-sandbox'];
-      
+
       const child = spawn(cmd, args, {
         shell: true,
         stdio: ['pipe', 'pipe', 'pipe']
@@ -233,32 +258,25 @@ export class LLMClient {
 
       child.on('close', code => {
         if (code !== 0) {
-          // O Codex as vezes retorna erro 1 mas imprime a resposta, vamos tentar salvar
           if (stdout.trim().length > 0) {
-             // Tenta limpar mesmo com erro
+            // Try to use output even with error
           } else {
-             reject(new Error(`Codex CLI falhou (exit code ${code}): ${stderr || 'Erro desconhecido'}`));
-             return;
+            reject(new Error(`Codex CLI falhou (exit code ${code}): ${stderr || 'Erro desconhecido'}`));
+            return;
           }
         }
-        
-        // Limpeza da saída
+
         let cleanOutput = stdout
-          // Remove sequências ANSI de cores/controle
           .replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '')
-          // Remove linhas de log conhecidas do Codex CLI
           .replace(/^.*Codex CLI.*$/gm, '')
           .replace(/^.*Working.*$/gm, '')
           .replace(/^.*To continue this session.*$/gm, '')
-          // Remove Token usage info
           .replace(/Token usage:.*$/ms, '')
-          // Remove linhas vazias excessivas
           .replace(/^\s*[\r\n]/gm, '')
           .trim();
 
-        // Se a saída estiver vazia, tenta pegar do stderr (alguns CLIs mandam pra lá)
         if (!cleanOutput && stderr) {
-            cleanOutput = stderr.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '').trim();
+          cleanOutput = stderr.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '').trim();
         }
 
         resolve({
@@ -267,13 +285,12 @@ export class LLMClient {
         });
       });
 
-      // Escreve o prompt no stdin
       child.stdin.write(prompt);
       child.stdin.end();
     });
   }
 
-  private async doChat(isRetry: boolean): Promise<LLMResponse> {
+  private async doChat(isRetry: boolean, onDelta?: (text: string) => void): Promise<LLMResponse> {
     // If local execution is enabled, bypass the API logic
     if (process.env.USE_LOCAL_CODEX === 'true') {
       const messages: LLMMessage[] = [];
@@ -287,7 +304,6 @@ export class LLMClient {
     const accessToken = await this.auth.getAccessToken();
     const chatgptAccountId = this.auth.getChatGPTAccountId();
 
-    // Converte mensagens para o formato Responses API
     const input = convertToResponsesInput(this.conversationHistory);
 
     const model = normalizeModelName(
@@ -301,12 +317,11 @@ export class LLMClient {
       instructions: this.systemPrompt || undefined,
       input,
       reasoning: { effort: 'medium', summary: 'auto' },
-      include: ['reasoning.encrypted_content'],
     });
 
     const url = `${CHATGPT_BASE_URL}${CODEX_RESPONSES_PATH}`;
 
-    const response = await httpsRequest(
+    const response = await httpsRequestRaw(
       url,
       {
         method: 'POST',
@@ -323,27 +338,31 @@ export class LLMClient {
       requestBody
     );
 
-    // Tratamento de erros HTTP
+    // Error handling — read body only for errors (small payloads)
     if (response.statusCode === 401) {
+      response.stream.resume(); // drain
       if (!isRetry) {
         await this.auth.refreshIfNeeded();
-        return this.doChat(true);
+        return this.doChat(true, onDelta);
       }
       throw new Error('Token inválido ou expirado. Faça login novamente.');
     }
 
     if (response.statusCode === 429) {
+      response.stream.resume();
       throw new Error('Limite de uso atingido. Aguarde um momento e tente novamente.');
     }
 
     if (response.statusCode && response.statusCode >= 500) {
+      response.stream.resume();
       throw new Error('Serviço indisponível. Tente novamente em alguns instantes.');
     }
 
     if (response.statusCode !== 200) {
+      const errorBody = await readBody(response.stream);
       let errorMsg = `Erro na API ChatGPT (HTTP ${response.statusCode})`;
       try {
-        const errorData = JSON.parse(response.data) as {
+        const errorData = JSON.parse(errorBody) as {
           error?: { message?: string };
           detail?: string;
         };
@@ -353,16 +372,15 @@ export class LLMClient {
           errorMsg += `: ${errorData.detail}`;
         }
       } catch {
-        // A resposta pode ser SSE parcial, tenta extrair mensagem de erro
-        if (response.data.length < 500) {
-          errorMsg += `: ${response.data}`;
+        if (errorBody.length < 500) {
+          errorMsg += `: ${errorBody}`;
         }
       }
       throw new Error(errorMsg);
     }
 
-    // Parseia a resposta SSE
-    const { content, usage } = extractTextFromSSE(response.data);
+    // Stream SSE — parse incrementally, only accumulate text
+    const { content, usage } = await parseSSEStream(response.stream, onDelta);
 
     if (!content) {
       throw new Error('Resposta vazia do ChatGPT. Tente novamente.');

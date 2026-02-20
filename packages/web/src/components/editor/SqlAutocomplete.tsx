@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Table2, Columns3, Key, FolderOpen } from 'lucide-react';
-import { getSuggestions, type Suggestion, type SuggestionKind } from '../../lib/sql-autocomplete';
+import { getSuggestions, type SuggestionKind } from '../../lib/sql-autocomplete';
 import type { SchemaMap } from '../../types';
 
 interface SqlAutocompleteProps {
@@ -34,11 +34,12 @@ export function SqlAutocomplete({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const listRef = useRef<HTMLDivElement>(null);
-  const mirrorRef = useRef<HTMLDivElement | null>(null);
 
-  const { suggestions, wordStart, wordEnd } = visible
-    ? getSuggestions(sql, cursorPos, schemaMap)
-    : { suggestions: [], wordStart: 0, wordEnd: 0 };
+  // Memoize suggestions so they only recompute when inputs change
+  const { suggestions, wordStart, wordEnd } = useMemo(() => {
+    if (!visible) return { suggestions: [], wordStart: 0, wordEnd: 0 };
+    return getSuggestions(sql, cursorPos, schemaMap);
+  }, [visible, sql, cursorPos, schemaMap]);
 
   // Reset selection when suggestions change
   useEffect(() => {
@@ -178,13 +179,16 @@ function getCaretPosition(textarea: HTMLTextAreaElement): { top: number; left: n
   const textBeforeCursor = textarea.value.substring(0, textarea.selectionStart);
   mirror.textContent = textBeforeCursor;
 
-  // Add a span to measure final position
+  // Add a span to measure final position, then clean it up
   const marker = document.createElement('span');
   marker.textContent = '|';
   mirror.appendChild(marker);
 
   const markerRect = marker.getBoundingClientRect();
   const mirrorRect = mirror.getBoundingClientRect();
+
+  // Clean up the marker to prevent DOM node leaks
+  mirror.removeChild(marker);
 
   const relativeTop = markerRect.top - mirrorRect.top - textarea.scrollTop;
   const relativeLeft = markerRect.left - mirrorRect.left;
@@ -196,10 +200,12 @@ function getCaretPosition(textarea: HTMLTextAreaElement): { top: number; left: n
 }
 
 let _mirror: HTMLDivElement | null = null;
-function getOrCreateMirror(textarea: HTMLTextAreaElement): HTMLDivElement {
+function getOrCreateMirror(_textarea: HTMLTextAreaElement): HTMLDivElement {
   if (!_mirror) {
     _mirror = document.createElement('div');
     document.body.appendChild(_mirror);
   }
+  // Clear any leftover content from previous calls
+  _mirror.textContent = '';
   return _mirror;
 }

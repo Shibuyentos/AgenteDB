@@ -12,7 +12,7 @@ import { useAppStore } from './stores/app-store';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 function App() {
-  const { activePage } = useAppStore();
+  const activePage = useAppStore((s) => s.activePage);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
 

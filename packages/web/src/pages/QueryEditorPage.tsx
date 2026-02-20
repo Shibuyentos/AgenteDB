@@ -14,7 +14,7 @@ export function QueryEditorPage() {
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [cursorPos, setCursorPos] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { schemaMap } = useAppStore();
+  const schemaMap = useAppStore((s) => s.schemaMap);
 
   const handleExecute = async () => {
     if (!sql.trim()) return;
