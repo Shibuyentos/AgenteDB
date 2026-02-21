@@ -1,6 +1,6 @@
 import * as https from 'https';
 import { spawn } from 'child_process';
-import type { IncomingHttpHeaders } from 'http';
+import type { IncomingHttpHeaders, IncomingMessage } from 'http';
 import type { IAuthProvider } from '../auth/oauth.js';
 import { getAuth } from '../utils/config.js';
 
@@ -22,6 +22,9 @@ export interface LLMResponse {
 
 // ─── Helpers ───
 
+/**
+ * Makes an HTTPS request and buffers the entire response (used by Anthropic).
+ */
 function httpsRequest(
   url: string,
   options: https.RequestOptions,
@@ -55,6 +58,143 @@ function httpsRequest(
 
     req.write(body);
     req.end();
+  });
+}
+
+/**
+ * Makes an HTTPS request and returns the raw response stream.
+ * Does NOT buffer the response — caller handles the stream.
+ */
+function httpsRequestRaw(
+  url: string,
+  options: https.RequestOptions,
+  body: string
+): Promise<{ statusCode: number; stream: IncomingMessage; headers: IncomingHttpHeaders }> {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const reqOptions: https.RequestOptions = {
+      ...options,
+      hostname: urlObj.hostname,
+      port: urlObj.port || 443,
+      path: urlObj.pathname + urlObj.search,
+      timeout: 120000,
+    };
+
+    const req = https.request(reqOptions, (res) => {
+      resolve({ statusCode: res.statusCode ?? 0, stream: res, headers: res.headers });
+    });
+
+    req.on('error', reject);
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Timeout na chamada ao LLM (120s)'));
+    });
+
+    req.write(body);
+    req.end();
+  });
+}
+
+/**
+ * Read a small response body (for error responses).
+ */
+function readBody(stream: IncomingMessage, maxBytes = 8192): Promise<string> {
+  return new Promise((resolve) => {
+    let data = '';
+    let bytes = 0;
+    stream.on('data', (chunk: Buffer) => {
+      bytes += chunk.length;
+      if (bytes <= maxBytes) {
+        data += chunk.toString();
+      }
+    });
+    stream.on('end', () => resolve(data));
+    stream.on('error', () => resolve(data));
+  });
+}
+
+/**
+ * Parse SSE stream incrementally — only accumulates text content.
+ * Reasoning tokens and other large payloads are discarded immediately.
+ */
+function parseSSEStream(
+  stream: IncomingMessage,
+  onDelta?: (text: string) => void
+): Promise<{ content: string; usage: { input: number; output: number; total: number } }> {
+  return new Promise((resolve, reject) => {
+    let content = '';
+    let usage = { input: 0, output: 0, total: 0 };
+    let buffer = '';
+
+    stream.on('data', (chunk: Buffer) => {
+      buffer += chunk.toString();
+
+      // Process complete SSE lines
+      let newlineIdx: number;
+      while ((newlineIdx = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.substring(0, newlineIdx).trimEnd();
+        buffer = buffer.substring(newlineIdx + 1);
+
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.substring(6).trim();
+        if (!jsonStr || jsonStr === '[DONE]') continue;
+
+        try {
+          const event = JSON.parse(jsonStr) as Record<string, unknown>;
+          const eventType = event.type as string | undefined;
+
+          // Collect text deltas incrementally
+          if (eventType === 'response.output_text.delta' && typeof event.delta === 'string') {
+            content += event.delta;
+            if (onDelta) onDelta(event.delta);
+          }
+
+          // On response.completed, extract final text and usage (overrides deltas)
+          if (eventType === 'response.completed' || eventType === 'response.done') {
+            const response = event.response as Record<string, unknown> | undefined;
+            if (response) {
+              // Extract final text
+              const output = response.output as Array<Record<string, unknown>> | undefined;
+              if (output) {
+                for (const item of output) {
+                  if (item.type === 'message' && item.role === 'assistant') {
+                    const contentArr = item.content as Array<Record<string, unknown>> | undefined;
+                    if (contentArr) {
+                      for (const part of contentArr) {
+                        if (part.type === 'output_text' && typeof part.text === 'string') {
+                          content = part.text; // final authoritative text
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              // Extract usage
+              const usageData = response.usage as Record<string, number> | undefined;
+              if (usageData) {
+                usage = {
+                  input: usageData.input_tokens ?? 0,
+                  output: usageData.output_tokens ?? 0,
+                  total: usageData.total_tokens ?? (usageData.input_tokens ?? 0) + (usageData.output_tokens ?? 0),
+                };
+              }
+            }
+          }
+
+          // All other event types (reasoning, etc.) are discarded — not accumulated
+        } catch {
+          // Ignore malformed SSE lines
+        }
+      }
+    });
+
+    stream.on('end', () => {
+      resolve({ content, usage });
+    });
+
+    stream.on('error', (err) => {
+      reject(err);
+    });
   });
 }
 
@@ -102,71 +242,6 @@ function convertToResponsesInput(messages: LLMMessage[]): ResponsesInputItem[] {
     });
   }
   return input;
-}
-
-function extractTextFromSSE(sseData: string): { content: string; usage: { input: number; output: number; total: number } } {
-  let content = '';
-  let usage = { input: 0, output: 0, total: 0 };
-
-  for (const line of sseData.split('\n')) {
-    if (!line.startsWith('data: ')) continue;
-    const jsonStr = line.substring(6).trim();
-    if (!jsonStr || jsonStr === '[DONE]') continue;
-
-    try {
-      const event = JSON.parse(jsonStr) as Record<string, unknown>;
-      const eventType = event.type as string | undefined;
-
-      if (eventType === 'response.completed' || eventType === 'response.done') {
-        const response = event.response as Record<string, unknown> | undefined;
-        if (response) {
-          const output = response.output as Array<Record<string, unknown>> | undefined;
-          if (output) {
-            for (const item of output) {
-              if (item.type === 'message' && item.role === 'assistant') {
-                const contentArr = item.content as Array<Record<string, unknown>> | undefined;
-                if (contentArr) {
-                  for (const part of contentArr) {
-                    if (part.type === 'output_text' && typeof part.text === 'string') {
-                      content = part.text;
-                    }
-                  }
-                }
-              }
-            }
-          }
-          const usageData = response.usage as Record<string, number> | undefined;
-          if (usageData) {
-            usage = {
-              input: usageData.input_tokens ?? 0,
-              output: usageData.output_tokens ?? 0,
-              total: usageData.total_tokens ?? (usageData.input_tokens ?? 0) + (usageData.output_tokens ?? 0),
-            };
-          }
-        }
-      }
-    } catch {
-      // Ignora linhas SSE que não são JSON válido
-    }
-  }
-
-  if (!content) {
-    for (const line of sseData.split('\n')) {
-      if (!line.startsWith('data: ')) continue;
-      const jsonStr = line.substring(6).trim();
-      if (!jsonStr || jsonStr === '[DONE]') continue;
-      try {
-        const event = JSON.parse(jsonStr) as Record<string, unknown>;
-        if (event.type === 'response.output_text.delta' && typeof event.delta === 'string') {
-          content += event.delta;
-        }
-      } catch {
-        // ignore
-      }
-    }
-  }
-
-  return { content, usage };
 }
 
 // ─── Anthropic SSE Parser ───
@@ -266,10 +341,10 @@ export class LLMClient {
     return normalizeModelName(process.env.OPENAI_MODEL || getAuth()?.model || DEFAULT_MODEL);
   }
 
-  async chat(userMessage: string): Promise<LLMResponse> {
+  async chat(userMessage: string, onDelta?: (text: string) => void): Promise<LLMResponse> {
     this.conversationHistory.push({ role: 'user', content: userMessage });
     this.trimHistory();
-    return this.doChat(false);
+    return this.doChat(false, onDelta);
   }
 
   clearHistory(): void {
@@ -327,7 +402,7 @@ export class LLMClient {
           .trim();
 
         if (!cleanOutput && stderr) {
-            cleanOutput = stderr.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '').trim();
+          cleanOutput = stderr.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '').trim();
         }
 
         resolve({
@@ -341,7 +416,7 @@ export class LLMClient {
     });
   }
 
-  private async doChat(isRetry: boolean): Promise<LLMResponse> {
+  private async doChat(isRetry: boolean, onDelta?: (text: string) => void): Promise<LLMResponse> {
     if (process.env.USE_LOCAL_CODEX === 'true') {
       const messages: LLMMessage[] = [];
       if (this.systemPrompt) {
@@ -355,7 +430,7 @@ export class LLMClient {
     if (provider === 'anthropic') {
       return this.doChatAnthropic(isRetry);
     }
-    return this.doChatOpenAI(isRetry);
+    return this.doChatOpenAI(isRetry, onDelta);
   }
 
   private async doChatAnthropic(isRetry: boolean): Promise<LLMResponse> {
@@ -441,7 +516,7 @@ export class LLMClient {
     };
   }
 
-  private async doChatOpenAI(isRetry: boolean): Promise<LLMResponse> {
+  private async doChatOpenAI(isRetry: boolean, onDelta?: (text: string) => void): Promise<LLMResponse> {
     const accessToken = await this.auth.getAccessToken();
 
     // OpenAI-specific: get chatgpt account ID
@@ -460,12 +535,11 @@ export class LLMClient {
       instructions: this.systemPrompt || undefined,
       input,
       reasoning: { effort: 'medium', summary: 'auto' },
-      include: ['reasoning.encrypted_content'],
     });
 
     const url = `${CHATGPT_BASE_URL}${CODEX_RESPONSES_PATH}`;
 
-    const response = await httpsRequest(
+    const response = await httpsRequestRaw(
       url,
       {
         method: 'POST',
@@ -482,26 +556,31 @@ export class LLMClient {
       requestBody
     );
 
+    // Error handling — read body only for errors (small payloads)
     if (response.statusCode === 401) {
+      response.stream.resume(); // drain
       if (!isRetry) {
         await this.auth.getAccessToken();
-        return this.doChatOpenAI(true);
+        return this.doChatOpenAI(true, onDelta);
       }
       throw new Error('Token inválido ou expirado. Faça login novamente.');
     }
 
     if (response.statusCode === 429) {
+      response.stream.resume();
       throw new Error('Limite de uso atingido. Aguarde um momento e tente novamente.');
     }
 
     if (response.statusCode && response.statusCode >= 500) {
+      response.stream.resume();
       throw new Error('Serviço indisponível. Tente novamente em alguns instantes.');
     }
 
     if (response.statusCode !== 200) {
+      const errorBody = await readBody(response.stream);
       let errorMsg = `Erro na API ChatGPT (HTTP ${response.statusCode})`;
       try {
-        const errorData = JSON.parse(response.data) as {
+        const errorData = JSON.parse(errorBody) as {
           error?: { message?: string };
           detail?: string;
         };
@@ -511,14 +590,15 @@ export class LLMClient {
           errorMsg += `: ${errorData.detail}`;
         }
       } catch {
-        if (response.data.length < 500) {
-          errorMsg += `: ${response.data}`;
+        if (errorBody.length < 500) {
+          errorMsg += `: ${errorBody}`;
         }
       }
       throw new Error(errorMsg);
     }
 
-    const { content, usage } = extractTextFromSSE(response.data);
+    // Stream SSE — parse incrementally, only accumulate text
+    const { content, usage } = await parseSSEStream(response.stream, onDelta);
 
     if (!content) {
       throw new Error('Resposta vazia do ChatGPT. Tente novamente.');

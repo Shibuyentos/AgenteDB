@@ -86,7 +86,7 @@ export class DatabaseConnector {
 
       return {
         rows: result.rows as T[],
-        rowCount: result.rowCount ?? 0,
+        rowCount: result.rowCount ?? result.rows.length,
         duration,
         columns,
       };
@@ -119,7 +119,7 @@ export class DatabaseConnector {
 
       return {
         rows: result.rows as T[],
-        rowCount: result.rowCount ?? 0,
+        rowCount: result.rowCount ?? result.rows.length,
         duration,
         columns,
       };

@@ -42,6 +42,7 @@ export {
 export type {
   ConnectionConfig,
   AuthConfig,
+  ScriptConfig,
   ConfigData,
 } from './utils/config.js';
 

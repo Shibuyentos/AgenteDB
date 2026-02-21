@@ -54,6 +54,22 @@ export function createQueryRoutes(state: ServerState): Router {
     }
   });
 
+  // POST /api/query/read-only
+  router.post('/read-only', (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { enabled } = req.body as { enabled: boolean };
+      if (typeof enabled !== 'boolean') {
+        throw createApiError('Campo "enabled" (boolean) é obrigatório', 400, 'VALIDATION_ERROR');
+      }
+      if (state.executor) {
+        state.executor.setReadOnlyMode(enabled);
+      }
+      res.json({ readOnly: enabled });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // GET /api/query/history
   router.get('/history', (_req: Request, res: Response) => {
     res.json(state.queryHistory);

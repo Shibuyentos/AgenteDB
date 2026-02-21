@@ -28,6 +28,13 @@ function post<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
+function put<T>(path: string, body?: unknown): Promise<T> {
+  return request<T>(path, {
+    method: 'PUT',
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
 function del<T>(path: string): Promise<T> {
   return request<T>(path, { method: 'DELETE' });
 }
@@ -59,7 +66,14 @@ export const api = {
   },
   query: {
     execute: (sql: string) => post<{ rows: any[]; rowCount: number; duration: number; columns: string[] }>('/query/execute', { sql }),
+    setReadOnly: (enabled: boolean) => post<{ readOnly: boolean }>('/query/read-only', { enabled }),
     history: () => get<any[]>('/query/history'),
     clearHistory: () => del<{ success: boolean }>('/query/history'),
+  },
+  scripts: {
+    list: () => get<import('../types').SqlScript[]>('/scripts'),
+    create: (data: { name?: string; sql?: string }) => post<import('../types').SqlScript>('/scripts', data),
+    update: (id: string, data: { name?: string; sql?: string }) => put<import('../types').SqlScript>(`/scripts/${id}`, data),
+    remove: (id: string) => del<{ success: boolean }>(`/scripts/${id}`),
   },
 };

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { User } from 'lucide-react';
 import { SQLBlock } from './SQLBlock';
 import { ResultTable } from './ResultTable';
@@ -67,7 +68,7 @@ function formatInline(text: string): React.ReactNode {
   return text;
 }
 
-export function ChatMessage({ message }: ChatMessageProps) {
+export const ChatMessage = memo(function ChatMessage({ message }: ChatMessageProps) {
   if (message.type === 'thinking' || message.type === 'executing') {
     return (
       <div className="flex gap-3 animate-slideUp">
@@ -134,4 +135,4 @@ export function ChatMessage({ message }: ChatMessageProps) {
       </div>
     </div>
   );
-}
+});

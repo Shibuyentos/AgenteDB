@@ -81,6 +81,14 @@ export interface RelationEdge {
   toColumn: string;
 }
 
+export interface SqlScript {
+  id: string;
+  name: string;
+  sql: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface QueryResult {
   rows: Record<string, unknown>[];
   rowCount: number;

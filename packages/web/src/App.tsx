@@ -5,6 +5,7 @@ import { AuthModal } from './components/modals/AuthModal';
 import { ChatPage } from './pages/ChatPage';
 import { TableDetailPage } from './pages/TableDetailPage';
 import { QueryEditorPage } from './pages/QueryEditorPage';
+import { ScriptsPage } from './pages/ScriptsPage';
 import { ToastContainer } from './components/ui/Toast';
 import { CommandPalette } from './components/ui/CommandPalette';
 import { RelationGraph } from './components/schema/RelationGraph';
@@ -12,7 +13,7 @@ import { useAppStore } from './stores/app-store';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 function App() {
-  const { activePage } = useAppStore();
+  const activePage = useAppStore((s) => s.activePage);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -34,6 +35,7 @@ function App() {
           {activePage === 'chat' && <ChatPage />}
           {activePage === 'table-detail' && <TableDetailPage />}
           {activePage === 'query-editor' && <QueryEditorPage />}
+          {activePage === 'scripts' && <ScriptsPage />}
         </main>
       </div>
 
