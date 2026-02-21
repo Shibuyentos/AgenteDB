@@ -2,14 +2,16 @@ import { create } from 'zustand';
 import type { Connection, SchemaMap, TableInfo } from '../types';
 import { api } from '../lib/api';
 
-export type SidebarTab = 'connections' | 'schema' | 'history';
-export type ActivePage = 'chat' | 'query-editor' | 'table-detail';
+export type SidebarTab = 'connections' | 'schema' | 'history' | 'scripts';
+export type ActivePage = 'chat' | 'query-editor' | 'table-detail' | 'scripts';
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 interface AppState {
   // Auth
   isAuthenticated: boolean;
   accountId: string | null;
+  provider: 'openai' | 'anthropic' | null;
+  model: string | null;
 
   // Connection
   connections: Connection[];
@@ -29,7 +31,8 @@ interface AppState {
   readOnlyMode: boolean;
 
   // Actions
-  setAuthenticated: (status: boolean, accountId?: string) => void;
+  setModel: (model: string | null) => void;
+  setAuthenticated: (status: boolean, accountId?: string, provider?: 'openai' | 'anthropic' | null) => void;
   setConnections: (conns: Connection[]) => void;
   addConnection: (conn: Connection) => void;
   removeConnection: (name: string) => void;
@@ -49,6 +52,8 @@ export const useAppStore = create<AppState>((set) => ({
   // Auth
   isAuthenticated: false,
   accountId: null,
+  provider: null,
+  model: null,
 
   // Connection
   connections: [],
@@ -68,8 +73,9 @@ export const useAppStore = create<AppState>((set) => ({
   readOnlyMode: true,
 
   // Actions
-  setAuthenticated: (status, accountId) =>
-    set({ isAuthenticated: status, accountId: accountId || null }),
+  setModel: (model) => set({ model }),
+  setAuthenticated: (status, accountId, provider) =>
+    set({ isAuthenticated: status, accountId: accountId || null, provider: provider ?? null }),
 
   setConnections: (conns) => set({ connections: conns }),
 

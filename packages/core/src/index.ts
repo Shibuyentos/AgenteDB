@@ -1,7 +1,9 @@
 // ─── Core exports ───
 // Auth
 export { OpenAIAuth } from './auth/oauth.js';
-export type { TokenData } from './auth/oauth.js';
+export type { TokenData, IAuthProvider } from './auth/oauth.js';
+export { AnthropicAuth } from './auth/anthropic-oauth.js';
+export type { AnthropicTokenData } from './auth/anthropic-oauth.js';
 
 // Database
 export { DatabaseConnector } from './db/connector.js';
@@ -40,6 +42,7 @@ export {
 export type {
   ConnectionConfig,
   AuthConfig,
+  ScriptConfig,
   ConfigData,
 } from './utils/config.js';
 

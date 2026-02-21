@@ -5,7 +5,7 @@ import { useWebSocket } from '../hooks/useWebSocket';
 import { useAppStore } from '../stores/app-store';
 
 export function ChatPage() {
-  const { connectionStatus } = useAppStore();
+  const connectionStatus = useAppStore((s) => s.connectionStatus);
   const { messages, sendMessage, isConnected, clearMessages } = useWebSocket();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);

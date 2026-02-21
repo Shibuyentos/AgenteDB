@@ -20,9 +20,18 @@ export interface AuthConfig {
   model?: string;
 }
 
+export interface ScriptConfig {
+  id: string;
+  name: string;
+  sql: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ConfigData {
   connections: ConnectionConfig[];
   auth: AuthConfig | null;
+  scripts: ScriptConfig[];
 }
 
 // ─── Constantes ───
@@ -42,6 +51,7 @@ function getDefaultConfig(): ConfigData {
   return {
     connections: [],
     auth: null,
+    scripts: [],
   };
 }
 
@@ -62,6 +72,9 @@ export function loadConfig(): ConfigData {
 
     if (!Array.isArray(parsed.connections)) {
       parsed.connections = [];
+    }
+    if (!Array.isArray(parsed.scripts)) {
+      parsed.scripts = [];
     }
 
     return parsed;

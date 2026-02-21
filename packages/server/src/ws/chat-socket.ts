@@ -63,8 +63,23 @@ export function setupChatSocket(server: Server, state: ServerState): void {
         // 1. Thinking
         send(ws, { type: 'thinking', content: '' });
 
-        // 2. Chat with LLM
+        // 2. Chat with LLM (streaming)
         const response = await state.llmClient.chat(data.content);
+
+        if (!response || !response.content) {
+          send(ws, { type: 'error', content: 'Resposta vazia do LLM.' });
+          return;
+        }
+
+        // Re-check executor (may have been cleared during LLM call)
+        if (!state.executor) {
+          if (state.activeConnection) {
+            state.executor = new QueryExecutor(state.activeConnection);
+          } else {
+            send(ws, { type: 'text', content: response.content });
+            return;
+          }
+        }
 
         // 3. Check for SQL
         const sql = state.executor.extractSQL(response.content);
@@ -113,11 +128,12 @@ export function setupChatSocket(server: Server, state: ServerState): void {
               },
             });
 
-            // Get summary from LLM
+            // Get summary from LLM — lightweight version
             if (result.rows.length > 0) {
-              const rowsToSend = result.rows.slice(0, 20);
-              const totalRows = result.rows.length;
-              const summaryMsg = `[Sistema] A query foi executada com sucesso e retornou ${totalRows} linha(s) em ${result.duration}ms. Aqui estão os dados:\n${JSON.stringify(rowsToSend, null, 2)}${totalRows > 20 ? `\n(mostrando 20 de ${totalRows} linhas)` : ''}`;
+              const rowsToSend = result.rows.slice(0, 5);
+              const totalRows = result.rowCount;
+              const cols = result.columns || Object.keys(result.rows[0] || {});
+              const summaryMsg = `[Sistema] Query executada: ${totalRows} linha(s), ${result.duration}ms. Colunas: ${cols.join(', ')}. Amostra (${Math.min(5, result.rows.length)} linhas):\n${JSON.stringify(rowsToSend)}${totalRows > 5 ? `\n(${totalRows} linhas no total)` : ''}`;
               try {
                 const summary = await state.llmClient.chat(summaryMsg);
                 send(ws, { type: 'summary', content: summary.content });

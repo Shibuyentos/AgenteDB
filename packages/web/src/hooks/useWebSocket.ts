@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { ChatMessage } from '../types';
 
+const MAX_MESSAGES = 150;
+
 let messageIdCounter = 0;
 function nextId(): string {
   return `msg-${Date.now()}-${++messageIdCounter}`;
@@ -12,6 +14,31 @@ export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const closedIntentionallyRef = useRef(false);
+
+  const addMessage = useCallback((msg: ChatMessage) => {
+    setMessages((prev) => {
+      // If result message has too many rows, truncate to save memory
+      if (msg.type === 'result' && msg.data?.rows && msg.data.rows.length > 100) {
+        msg = {
+          ...msg,
+          data: {
+            ...msg.data,
+            rows: msg.data.rows.slice(0, 100),
+          },
+        };
+      }
+      // Remove previous thinking/executing indicators — they are transient
+      const filtered = prev.filter(
+        (m) => m.type !== 'thinking' && m.type !== 'executing'
+      );
+      const next = [...filtered, msg];
+      // Drop oldest messages if over limit
+      if (next.length > MAX_MESSAGES) {
+        return next.slice(next.length - MAX_MESSAGES);
+      }
+      return next;
+    });
+  }, []);
 
   const connect = useCallback(() => {
     try {
@@ -26,6 +53,10 @@ export function useWebSocket() {
 
       ws.onclose = () => {
         setIsConnected(false);
+        // Remove any stuck thinking/executing indicators on disconnect
+        setMessages((prev) =>
+          prev.filter((m) => m.type !== 'thinking' && m.type !== 'executing')
+        );
         if (!closedIntentionallyRef.current) {
           console.log('[WS] Disconnected, reconnecting in 3s...');
           reconnectTimeoutRef.current = setTimeout(connect, 3000);
@@ -46,7 +77,7 @@ export function useWebSocket() {
             data: data.data,
             timestamp: new Date(),
           };
-          setMessages((prev) => [...prev, msg]);
+          addMessage(msg);
         } catch {
           console.error('[WS] Failed to parse message');
         }
@@ -58,7 +89,7 @@ export function useWebSocket() {
         reconnectTimeoutRef.current = setTimeout(connect, 3000);
       }
     }
-  }, []);
+  }, [addMessage]);
 
   useEffect(() => {
     closedIntentionallyRef.current = false;
@@ -72,18 +103,16 @@ export function useWebSocket() {
 
   const sendMessage = useCallback((content: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      // Add user message locally
       const userMsg: ChatMessage = {
         id: nextId(),
         type: 'user',
         content,
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, userMsg]);
-
+      addMessage(userMsg);
       wsRef.current.send(JSON.stringify({ type: 'message', content }));
     }
-  }, []);
+  }, [addMessage]);
 
   const clearMessages = useCallback(() => {
     setMessages([]);

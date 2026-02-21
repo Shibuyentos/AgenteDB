@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Database, Lock, Key, PlugZap, MessageSquare, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Database, Lock, Key, PlugZap, MessageSquare, CheckCircle2, ArrowRight, ClipboardPaste } from 'lucide-react';
 import { Button, Input } from '../components/ui';
 import { api } from '../lib/api';
 import { useAppStore } from '../stores/app-store';
@@ -10,14 +10,22 @@ const steps = [
   { label: 'Chat!', icon: MessageSquare },
 ];
 
+type ProviderTab = 'anthropic' | 'openai';
+
 export function OnboardingPage() {
   const { setAuthenticated, addConnection, setActiveConnection, setConnectionStatus, setDbInfo, setSchemaMap, setIsLoadingSchema, setSidebarTab } = useAppStore();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
 
   // Auth state
+  const [provider, setProvider] = useState<ProviderTab>('anthropic');
   const [showApiKey, setShowApiKey] = useState(false);
   const [apiKey, setApiKey] = useState('');
+  const [error, setError] = useState('');
+
+  // Anthropic flow
+  const [anthropicStep, setAnthropicStep] = useState<'login' | 'paste'>('login');
+  const [anthropicCode, setAnthropicCode] = useState('');
 
   // Connection state
   const [connName, setConnName] = useState('');
@@ -25,6 +33,7 @@ export function OnboardingPage() {
 
   const handleOAuth = async () => {
     setLoading(true);
+    setError('');
     try {
       const { authUrl } = await api.auth.login();
       window.open(authUrl, '_blank', 'width=500,height=700');
@@ -32,7 +41,7 @@ export function OnboardingPage() {
         try {
           const status = await api.auth.status();
           if (status.authenticated) {
-            setAuthenticated(true, status.accountId);
+            setAuthenticated(true, status.accountId, status.provider);
             clearInterval(interval);
             setLoading(false);
             setStep(1);
@@ -45,12 +54,43 @@ export function OnboardingPage() {
     }
   };
 
+  const handleAnthropicLogin = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { authUrl } = await api.auth.anthropicLogin();
+      window.open(authUrl, '_blank', 'width=500,height=700');
+      setAnthropicStep('paste');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAnthropicExchange = async () => {
+    if (!anthropicCode.trim()) return;
+    setLoading(true);
+    setError('');
+    try {
+      const result = await api.auth.anthropicExchange(anthropicCode.trim());
+      if (result.success) {
+        setAuthenticated(true, result.accountId, 'anthropic');
+        setStep(1);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao trocar código');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleApiKey = async () => {
     if (!apiKey.trim()) return;
     setLoading(true);
     try {
       await api.auth.setApiKey(apiKey.trim());
-      setAuthenticated(true, 'api-key');
+      setAuthenticated(true, 'api-key', 'openai');
       setStep(1);
     } catch {} finally {
       setLoading(false);
@@ -121,23 +161,84 @@ export function OnboardingPage() {
           {step === 0 && (
             <div className="space-y-4 animate-slideUp">
               <h2 className="text-base font-semibold text-center">Autenticar</h2>
-              <p className="text-xs text-text-muted text-center">
-                Usa sua assinatura do ChatGPT. Zero custo extra.
-              </p>
-              <Button className="w-full justify-center" icon={<Lock className="w-4 h-4" />} onClick={handleOAuth} loading={loading && !showApiKey}>
-                Fazer login com OpenAI
-              </Button>
-              <Button variant="secondary" className="w-full justify-center" icon={<Key className="w-4 h-4" />} onClick={() => setShowApiKey(!showApiKey)}>
-                Usar API Key
-              </Button>
-              {showApiKey && (
-                <div className="space-y-2 animate-slideUp">
-                  <Input placeholder="sk-..." value={apiKey} onChange={(e) => setApiKey(e.target.value)} type="password" />
-                  <Button size="sm" className="w-full justify-center" onClick={handleApiKey} loading={loading} disabled={!apiKey.trim()}>
-                    Salvar
+
+              {/* Provider Tabs */}
+              <div className="flex rounded-lg bg-bg-elevated p-1">
+                <button
+                  onClick={() => { setProvider('anthropic'); setAnthropicStep('login'); setAnthropicCode(''); setError(''); }}
+                  className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+                    provider === 'anthropic' ? 'bg-bg-card text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                  }`}
+                >
+                  Claude
+                </button>
+                <button
+                  onClick={() => { setProvider('openai'); setError(''); }}
+                  className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+                    provider === 'openai' ? 'bg-bg-card text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                  }`}
+                >
+                  ChatGPT
+                </button>
+              </div>
+
+              {error && (
+                <div className="p-2 rounded-md bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+                  {error}
+                </div>
+              )}
+
+              {/* Anthropic */}
+              {provider === 'anthropic' && anthropicStep === 'login' && (
+                <>
+                  <p className="text-xs text-text-muted text-center">
+                    Usa sua assinatura Claude Pro/Max. Zero custo extra.
+                  </p>
+                  <Button className="w-full justify-center" icon={<Lock className="w-4 h-4" />} onClick={handleAnthropicLogin} loading={loading}>
+                    Fazer login com Claude
+                  </Button>
+                </>
+              )}
+              {provider === 'anthropic' && anthropicStep === 'paste' && (
+                <div className="space-y-3 animate-slideUp">
+                  <p className="text-xs text-text-muted text-center">
+                    Copie o codigo da pagina do Claude e cole abaixo:
+                  </p>
+                  <Input
+                    placeholder="Cole o codigo aqui..."
+                    value={anthropicCode}
+                    onChange={(e) => setAnthropicCode(e.target.value)}
+                    icon={<ClipboardPaste className="w-4 h-4" />}
+                  />
+                  <Button className="w-full justify-center" onClick={handleAnthropicExchange} loading={loading} disabled={!anthropicCode.trim()}>
+                    Confirmar
                   </Button>
                 </div>
               )}
+
+              {/* OpenAI */}
+              {provider === 'openai' && (
+                <>
+                  <p className="text-xs text-text-muted text-center">
+                    Usa sua assinatura do ChatGPT. Zero custo extra.
+                  </p>
+                  <Button className="w-full justify-center" icon={<Lock className="w-4 h-4" />} onClick={handleOAuth} loading={loading && !showApiKey}>
+                    Fazer login com OpenAI
+                  </Button>
+                  <Button variant="secondary" className="w-full justify-center" icon={<Key className="w-4 h-4" />} onClick={() => setShowApiKey(!showApiKey)}>
+                    Usar API Key
+                  </Button>
+                  {showApiKey && (
+                    <div className="space-y-2 animate-slideUp">
+                      <Input placeholder="sk-..." value={apiKey} onChange={(e) => setApiKey(e.target.value)} type="password" />
+                      <Button size="sm" className="w-full justify-center" onClick={handleApiKey} loading={loading} disabled={!apiKey.trim()}>
+                        Salvar
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+
               <button onClick={() => setStep(1)} className="w-full text-center text-[10px] text-text-muted hover:text-text-secondary transition-colors cursor-pointer mt-2">
                 Pular por agora
               </button>

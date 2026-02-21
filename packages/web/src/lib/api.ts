@@ -28,16 +28,27 @@ function post<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
+function put<T>(path: string, body?: unknown): Promise<T> {
+  return request<T>(path, {
+    method: 'PUT',
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
 function del<T>(path: string): Promise<T> {
   return request<T>(path, { method: 'DELETE' });
 }
 
 export const api = {
   auth: {
-    status: () => get<{ authenticated: boolean; accountId?: string }>('/auth/status'),
+    status: () => get<{ authenticated: boolean; accountId?: string; provider?: 'openai' | 'anthropic' | null; model?: string | null }>('/auth/status'),
     login: () => post<{ authUrl: string }>('/auth/login'),
     logout: () => post<{ success: boolean }>('/auth/logout'),
     setApiKey: (key: string) => post<{ success: boolean }>('/auth/apikey', { key }),
+    anthropicLogin: () => post<{ authUrl: string }>('/auth/anthropic/login'),
+    anthropicExchange: (code: string) => post<{ success: boolean; accountId: string }>('/auth/anthropic/exchange', { code }),
+    getModel: () => get<{ current: string | null; provider: string | null; available: string[] }>('/auth/model'),
+    setModel: (model: string) => post<{ success: boolean; model: string }>('/auth/model', { model }),
   },
   connections: {
     list: () => get<any[]>('/connections'),
@@ -58,5 +69,11 @@ export const api = {
     setReadOnly: (enabled: boolean) => post<{ readOnly: boolean }>('/query/read-only', { enabled }),
     history: () => get<any[]>('/query/history'),
     clearHistory: () => del<{ success: boolean }>('/query/history'),
+  },
+  scripts: {
+    list: () => get<import('../types').SqlScript[]>('/scripts'),
+    create: (data: { name?: string; sql?: string }) => post<import('../types').SqlScript>('/scripts', data),
+    update: (id: string, data: { name?: string; sql?: string }) => put<import('../types').SqlScript>(`/scripts/${id}`, data),
+    remove: (id: string) => del<{ success: boolean }>(`/scripts/${id}`),
   },
 };
