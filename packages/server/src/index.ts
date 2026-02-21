@@ -5,11 +5,13 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import {
   OpenAIAuth,
+  AnthropicAuth,
   DatabaseConnector,
   SchemaEngine,
   LLMClient,
   QueryExecutor,
 } from '@agentdb/core';
+import type { IAuthProvider } from '@agentdb/core';
 
 import { createAuthRoutes } from './routes/auth.js';
 import { createConnectionRoutes } from './routes/connections.js';
@@ -31,10 +33,14 @@ export interface QueryHistoryEntry {
 }
 
 export interface ServerState {
-  auth: OpenAIAuth;
+  auth: IAuthProvider;
+  openaiAuth: OpenAIAuth;
+  anthropicAuth: AnthropicAuth;
+  provider: 'openai' | 'anthropic' | null;
   isAuthenticated: boolean;
   accountId: string | null;
   pendingOAuth: { codeVerifier: string; state: string; redirectUri: string } | null;
+  pendingAnthropicOAuth: { codeVerifier: string; state: string } | null;
   activeConnection: DatabaseConnector | null;
   schemaEngine: SchemaEngine | null;
   llmClient: LLMClient | null;
@@ -49,15 +55,30 @@ const PORT = parseInt(process.env.PORT || '3001', 10);
 const app = express();
 const server = createServer(app);
 
-// State
-const auth = new OpenAIAuth();
-auth.loadFromConfig();
+// State - detect saved provider
+const openaiAuth = new OpenAIAuth();
+const anthropicAuth = new AnthropicAuth();
+
+let detectedProvider: 'openai' | 'anthropic' | null = null;
+let activeAuth: IAuthProvider = openaiAuth;
+
+if (anthropicAuth.loadFromConfig()) {
+  detectedProvider = 'anthropic';
+  activeAuth = anthropicAuth;
+} else if (openaiAuth.loadFromConfig()) {
+  detectedProvider = 'openai';
+  activeAuth = openaiAuth;
+}
 
 const state: ServerState = {
-  auth,
-  isAuthenticated: auth.isAuthenticated(),
-  accountId: auth.isAuthenticated() ? auth.getAccountId() : null,
+  auth: activeAuth,
+  openaiAuth,
+  anthropicAuth,
+  provider: detectedProvider,
+  isAuthenticated: activeAuth.isAuthenticated(),
+  accountId: activeAuth.isAuthenticated() ? activeAuth.getAccountId() : null,
   pendingOAuth: null,
+  pendingAnthropicOAuth: null,
   activeConnection: null,
   schemaEngine: null,
   llmClient: null,
@@ -86,6 +107,7 @@ app.get('/api/health', (_req, res) => {
     status: 'ok',
     authenticated: state.isAuthenticated,
     connected: state.activeConnection !== null,
+    provider: state.provider,
   });
 });
 
@@ -117,6 +139,7 @@ server.listen(PORT, () => {
 ║  WS:   ws://localhost:${PORT}/ws/chat    ║
 ║                                      ║
 ║  Auth: ${state.isAuthenticated ? '✅ Authenticated' : '❌ Not authenticated'}        ║
+║  Provider: ${(state.provider || 'none').padEnd(24)}║
 ╚══════════════════════════════════════╝
   `);
 });

@@ -47,7 +47,9 @@ export function Sidebar() {
   useEffect(() => {
     api.connections.list().then(setConnections).catch(console.error);
     api.auth.status().then(s => {
-      useAppStore.getState().setAuthenticated(s.authenticated, s.accountId);
+      const store = useAppStore.getState();
+      store.setAuthenticated(s.authenticated, s.accountId, s.provider);
+      if (s.model) store.setModel(s.model);
     }).catch(() => {});
   }, []);
 

@@ -1,8 +1,9 @@
 import { memo } from 'react';
-import { Bot, User } from 'lucide-react';
+import { User } from 'lucide-react';
 import { SQLBlock } from './SQLBlock';
 import { ResultTable } from './ResultTable';
 import { ThinkingIndicator } from './ThinkingIndicator';
+import { BotAvatar } from './BotAvatar';
 import type { ChatMessage as ChatMessageType } from '../../types';
 
 interface ChatMessageProps {
@@ -71,9 +72,7 @@ export const ChatMessage = memo(function ChatMessage({ message }: ChatMessagePro
   if (message.type === 'thinking' || message.type === 'executing') {
     return (
       <div className="flex gap-3 animate-slideUp">
-        <div className="w-7 h-7 rounded-full bg-bg-elevated flex items-center justify-center shrink-0 mt-1">
-          <Bot className="w-4 h-4 text-brand" />
-        </div>
+        <BotAvatar />
         <ThinkingIndicator />
       </div>
     );
@@ -95,9 +94,7 @@ export const ChatMessage = memo(function ChatMessage({ message }: ChatMessagePro
   if (message.type === 'sql') {
     return (
       <div className="flex gap-3 animate-slideUp">
-        <div className="w-7 h-7 rounded-full bg-bg-elevated flex items-center justify-center shrink-0 mt-1">
-          <Bot className="w-4 h-4 text-brand" />
-        </div>
+        <BotAvatar />
         <div className="flex-1 max-w-[85%]">
           <SQLBlock sql={message.content || ''} />
         </div>
@@ -119,9 +116,7 @@ export const ChatMessage = memo(function ChatMessage({ message }: ChatMessagePro
   if (message.type === 'error') {
     return (
       <div className="flex gap-3 animate-slideUp">
-        <div className="w-7 h-7 rounded-full bg-red-500/10 flex items-center justify-center shrink-0 mt-1">
-          <Bot className="w-4 h-4 text-red-400" />
-        </div>
+        <BotAvatar variant="error" />
         <div className="flex-1 max-w-[85%] bg-red-500/5 border border-red-500/20 rounded-xl rounded-tl-sm px-4 py-3">
           <p className="text-sm text-red-400">{message.content}</p>
         </div>
@@ -132,9 +127,7 @@ export const ChatMessage = memo(function ChatMessage({ message }: ChatMessagePro
   // text / summary
   return (
     <div className="flex gap-3 animate-slideUp">
-      <div className="w-7 h-7 rounded-full bg-bg-elevated flex items-center justify-center shrink-0 mt-1">
-        <Bot className="w-4 h-4 text-brand" />
-      </div>
+      <BotAvatar />
       <div className="flex-1 max-w-[85%] bg-bg-card border border-border/50 rounded-xl rounded-tl-sm px-4 py-3">
         <div className="text-sm leading-relaxed">
           {formatMarkdown(message.content || '')}

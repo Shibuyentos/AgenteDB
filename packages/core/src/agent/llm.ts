@@ -1,7 +1,7 @@
 import * as https from 'https';
 import { spawn } from 'child_process';
 import type { IncomingHttpHeaders, IncomingMessage } from 'http';
-import { OpenAIAuth } from '../auth/oauth.js';
+import type { IAuthProvider } from '../auth/oauth.js';
 import { getAuth } from '../utils/config.js';
 
 // ─── Interfaces ───
@@ -21,6 +21,45 @@ export interface LLMResponse {
 }
 
 // ─── Helpers ───
+
+/**
+ * Makes an HTTPS request and buffers the entire response (used by Anthropic).
+ */
+function httpsRequest(
+  url: string,
+  options: https.RequestOptions,
+  body: string
+): Promise<{ statusCode: number; data: string; headers: IncomingHttpHeaders }> {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const reqOptions: https.RequestOptions = {
+      ...options,
+      hostname: urlObj.hostname,
+      port: urlObj.port || 443,
+      path: urlObj.pathname + urlObj.search,
+      timeout: 120000,
+    };
+
+    const req = https.request(reqOptions, (res) => {
+      let data = '';
+      res.on('data', (chunk: Buffer) => {
+        data += chunk.toString();
+      });
+      res.on('end', () => {
+        resolve({ statusCode: res.statusCode ?? 0, data, headers: res.headers });
+      });
+    });
+
+    req.on('error', reject);
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Timeout na chamada ao LLM (120s)'));
+    });
+
+    req.write(body);
+    req.end();
+  });
+}
 
 /**
  * Makes an HTTPS request and returns the raw response stream.
@@ -164,6 +203,11 @@ function parseSSEStream(
 const CHATGPT_BASE_URL = 'https://chatgpt.com/backend-api';
 const CODEX_RESPONSES_PATH = '/codex/responses';
 
+// ─── Constantes Anthropic ───
+
+const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
+
 // ─── Classe ───
 
 const MAX_HISTORY_MESSAGES = 20;
@@ -200,17 +244,101 @@ function convertToResponsesInput(messages: LLMMessage[]): ResponsesInputItem[] {
   return input;
 }
 
+// ─── Anthropic SSE Parser ───
+
+function extractTextFromAnthropicSSE(sseData: string): { content: string; usage: { input: number; output: number; total: number } } {
+  let content = '';
+  let usage = { input: 0, output: 0, total: 0 };
+
+  for (const line of sseData.split('\n')) {
+    if (!line.startsWith('data: ')) continue;
+    const jsonStr = line.substring(6).trim();
+    if (!jsonStr || jsonStr === '[DONE]') continue;
+
+    try {
+      const event = JSON.parse(jsonStr) as Record<string, unknown>;
+      const eventType = event.type as string | undefined;
+
+      // content_block_delta - streaming text
+      if (eventType === 'content_block_delta') {
+        const delta = event.delta as Record<string, unknown> | undefined;
+        if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
+          content += delta.text;
+        }
+      }
+
+      // message_delta - usage info
+      if (eventType === 'message_delta') {
+        const msgUsage = event.usage as Record<string, number> | undefined;
+        if (msgUsage) {
+          usage.output = msgUsage.output_tokens ?? 0;
+        }
+      }
+
+      // message_start - input usage
+      if (eventType === 'message_start') {
+        const message = event.message as Record<string, unknown> | undefined;
+        const msgUsage = message?.usage as Record<string, number> | undefined;
+        if (msgUsage) {
+          usage.input = msgUsage.input_tokens ?? 0;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // If no streaming content found, try non-streaming response format
+  if (!content) {
+    try {
+      const parsed = JSON.parse(sseData) as Record<string, unknown>;
+      const contentArr = parsed.content as Array<Record<string, unknown>> | undefined;
+      if (contentArr) {
+        for (const block of contentArr) {
+          if (block.type === 'text' && typeof block.text === 'string') {
+            content += block.text;
+          }
+        }
+      }
+      const msgUsage = parsed.usage as Record<string, number> | undefined;
+      if (msgUsage) {
+        usage.input = msgUsage.input_tokens ?? 0;
+        usage.output = msgUsage.output_tokens ?? 0;
+      }
+    } catch {
+      // not a plain JSON response
+    }
+  }
+
+  usage.total = usage.input + usage.output;
+  return { content, usage };
+}
+
 export class LLMClient {
-  private auth: OpenAIAuth;
+  private auth: IAuthProvider;
   private conversationHistory: LLMMessage[] = [];
   private systemPrompt: string = '';
+  private modelOverride: string | null = null;
 
-  constructor(auth: OpenAIAuth) {
+  constructor(auth: IAuthProvider) {
     this.auth = auth;
   }
 
   setSystemPrompt(prompt: string): void {
     this.systemPrompt = prompt;
+  }
+
+  setModel(model: string): void {
+    this.modelOverride = model;
+  }
+
+  getModel(): string {
+    const provider = this.auth.getProvider();
+    if (this.modelOverride) return this.modelOverride;
+    if (provider === 'anthropic') {
+      return process.env.ANTHROPIC_MODEL || getAuth()?.model || DEFAULT_ANTHROPIC_MODEL;
+    }
+    return normalizeModelName(process.env.OPENAI_MODEL || getAuth()?.model || DEFAULT_MODEL);
   }
 
   async chat(userMessage: string, onDelta?: (text: string) => void): Promise<LLMResponse> {
@@ -258,11 +386,9 @@ export class LLMClient {
 
       child.on('close', code => {
         if (code !== 0) {
-          if (stdout.trim().length > 0) {
-            // Try to use output even with error
-          } else {
-            reject(new Error(`Codex CLI falhou (exit code ${code}): ${stderr || 'Erro desconhecido'}`));
-            return;
+          if (stdout.trim().length === 0) {
+             reject(new Error(`Codex CLI falhou (exit code ${code}): ${stderr || 'Erro desconhecido'}`));
+             return;
           }
         }
 
@@ -291,7 +417,6 @@ export class LLMClient {
   }
 
   private async doChat(isRetry: boolean, onDelta?: (text: string) => void): Promise<LLMResponse> {
-    // If local execution is enabled, bypass the API logic
     if (process.env.USE_LOCAL_CODEX === 'true') {
       const messages: LLMMessage[] = [];
       if (this.systemPrompt) {
@@ -301,14 +426,107 @@ export class LLMClient {
       return this.runLocalCodex(messages);
     }
 
+    const provider = this.auth.getProvider();
+    if (provider === 'anthropic') {
+      return this.doChatAnthropic(isRetry);
+    }
+    return this.doChatOpenAI(isRetry, onDelta);
+  }
+
+  private async doChatAnthropic(isRetry: boolean): Promise<LLMResponse> {
     const accessToken = await this.auth.getAccessToken();
-    const chatgptAccountId = this.auth.getChatGPTAccountId();
+
+    // Convert messages to Anthropic format
+    const messages = this.conversationHistory.map(m => ({
+      role: m.role === 'system' ? 'user' as const : m.role,
+      content: m.content,
+    }));
+
+    const model = this.modelOverride || process.env.ANTHROPIC_MODEL || getAuth()?.model || DEFAULT_ANTHROPIC_MODEL;
+
+    const requestBody = JSON.stringify({
+      model,
+      max_tokens: 4096,
+      stream: true,
+      system: this.systemPrompt || undefined,
+      messages,
+    });
+
+    const response = await httpsRequest(
+      ANTHROPIC_API_URL,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(requestBody).toString(),
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'oauth-2025-04-20',
+        },
+      },
+      requestBody
+    );
+
+    if (response.statusCode === 401) {
+      if (!isRetry) {
+        await this.auth.getAccessToken();
+        return this.doChatAnthropic(true);
+      }
+      throw new Error('Token Anthropic inválido ou expirado. Faça login novamente.');
+    }
+
+    if (response.statusCode === 429) {
+      throw new Error('Limite de uso Anthropic atingido. Aguarde um momento.');
+    }
+
+    if (response.statusCode && response.statusCode >= 500) {
+      throw new Error('Serviço Anthropic indisponível. Tente novamente.');
+    }
+
+    if (response.statusCode !== 200) {
+      let errorMsg = `Erro na API Anthropic (HTTP ${response.statusCode})`;
+      try {
+        const errorData = JSON.parse(response.data) as { error?: { message?: string } };
+        if (errorData.error?.message) {
+          errorMsg += `: ${errorData.error.message}`;
+        }
+      } catch {
+        if (response.data.length < 500) {
+          errorMsg += `: ${response.data}`;
+        }
+      }
+      throw new Error(errorMsg);
+    }
+
+    const { content, usage } = extractTextFromAnthropicSSE(response.data);
+
+    if (!content) {
+      throw new Error('Resposta vazia do Anthropic. Tente novamente.');
+    }
+
+    this.conversationHistory.push({ role: 'assistant', content });
+
+    return {
+      content,
+      tokensUsed: {
+        prompt: usage.input,
+        completion: usage.output,
+        total: usage.total,
+      },
+    };
+  }
+
+  private async doChatOpenAI(isRetry: boolean, onDelta?: (text: string) => void): Promise<LLMResponse> {
+    const accessToken = await this.auth.getAccessToken();
+
+    // OpenAI-specific: get chatgpt account ID
+    const chatgptAccountId = (this.auth as any).getChatGPTAccountId?.() || '';
 
     const input = convertToResponsesInput(this.conversationHistory);
 
-    const model = normalizeModelName(
-      process.env.OPENAI_MODEL || getAuth()?.model || DEFAULT_MODEL
-    );
+    const model = this.modelOverride
+      ? normalizeModelName(this.modelOverride)
+      : normalizeModelName(process.env.OPENAI_MODEL || getAuth()?.model || DEFAULT_MODEL);
 
     const requestBody = JSON.stringify({
       model,
@@ -342,8 +560,8 @@ export class LLMClient {
     if (response.statusCode === 401) {
       response.stream.resume(); // drain
       if (!isRetry) {
-        await this.auth.refreshIfNeeded();
-        return this.doChat(true, onDelta);
+        await this.auth.getAccessToken();
+        return this.doChatOpenAI(true, onDelta);
       }
       throw new Error('Token inválido ou expirado. Faça login novamente.');
     }

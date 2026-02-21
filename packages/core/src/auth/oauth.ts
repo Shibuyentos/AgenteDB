@@ -7,6 +7,15 @@ import { getAuth, saveAuth } from '../utils/config.js';
 
 // ─── Interfaces ───
 
+export interface IAuthProvider {
+  getAccessToken(): Promise<string>;
+  isAuthenticated(): boolean;
+  getAccountId(): string | null;
+  getProvider(): 'openai' | 'anthropic';
+  loadFromConfig(): boolean;
+  clearTokens(): void;
+}
+
 export interface TokenData {
   accessToken: string;
   refreshToken: string;
@@ -102,7 +111,7 @@ function httpsPost(
 /**
  * Autenticação OAuth PKCE com OpenAI.
  */
-export class OpenAIAuth {
+export class OpenAIAuth implements IAuthProvider {
   private static CLIENT_ID = process.env.OPENAI_CLIENT_ID || 'app_EMoamEEZ73f0CkXaXp7hrann';
   private static AUTH_URL = 'https://auth.openai.com/oauth/authorize';
   private static TOKEN_URL = 'https://auth.openai.com/oauth/token';
@@ -414,6 +423,10 @@ export class OpenAIAuth {
 
   getAccountId(): string | null {
     return this.tokenData?.accountId ?? null;
+  }
+
+  getProvider(): 'openai' {
+    return 'openai';
   }
 
   loadFromConfig(): boolean {
