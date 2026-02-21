@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
+import { AuthModal } from './components/modals/AuthModal';
 import { ChatPage } from './pages/ChatPage';
 import { TableDetailPage } from './pages/TableDetailPage';
 import { QueryEditorPage } from './pages/QueryEditorPage';
@@ -14,6 +15,7 @@ function App() {
   const { activePage } = useAppStore();
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const toggleCommandPalette = useCallback(() => {
     setShowCommandPalette((prev) => !prev);
@@ -25,7 +27,7 @@ function App() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[var(--color-bg-base)] text-[var(--color-text-primary)]">
-      <Header onOpenGraph={() => setShowGraph(true)} />
+      <Header onOpenGraph={() => setShowGraph(true)} onLogin={() => setShowAuthModal(true)} />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
         <main className="flex-1 overflow-hidden">
@@ -39,6 +41,7 @@ function App() {
       <ToastContainer />
       <CommandPalette isOpen={showCommandPalette} onClose={() => setShowCommandPalette(false)} />
       <RelationGraph isOpen={showGraph} onClose={() => setShowGraph(false)} />
+      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
     </div>
   );
 }

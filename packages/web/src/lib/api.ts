@@ -34,10 +34,12 @@ function del<T>(path: string): Promise<T> {
 
 export const api = {
   auth: {
-    status: () => get<{ authenticated: boolean; accountId?: string }>('/auth/status'),
+    status: () => get<{ authenticated: boolean; accountId?: string; provider?: 'openai' | 'anthropic' | null }>('/auth/status'),
     login: () => post<{ authUrl: string }>('/auth/login'),
     logout: () => post<{ success: boolean }>('/auth/logout'),
     setApiKey: (key: string) => post<{ success: boolean }>('/auth/apikey', { key }),
+    anthropicLogin: () => post<{ authUrl: string }>('/auth/anthropic/login'),
+    anthropicExchange: (code: string) => post<{ success: boolean; accountId: string }>('/auth/anthropic/exchange', { code }),
   },
   connections: {
     list: () => get<any[]>('/connections'),

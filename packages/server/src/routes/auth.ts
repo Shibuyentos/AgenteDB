@@ -1,38 +1,39 @@
 import { Router, type Request, type Response } from 'express';
-import { createApiError } from '../middleware/error-handler.js';
+import { LLMClient } from '@agentdb/core';
 import type { ServerState } from '../index.js';
 
 export function createAuthRoutes(state: ServerState): Router {
   const router = Router();
 
-  // POST /api/auth/login — Inicia fluxo OAuth
+  // ─── OpenAI Routes ───
+
+  // POST /api/auth/login — Inicia fluxo OAuth OpenAI
   router.post('/login', async (req: Request, res: Response) => {
     try {
-      // Inicia o processo headless: gera URL e já sobe o listener na 1455
-      const { authUrl, waitForCompletion } = await state.auth.startHeadlessAuth();
+      const { authUrl, waitForCompletion } = await state.openaiAuth.startHeadlessAuth();
 
-      // Inicia a espera pelo callback em background (sem await aqui para não travar o request)
       waitForCompletion()
         .then((tokenData) => {
+          state.auth = state.openaiAuth;
+          state.provider = 'openai';
           state.isAuthenticated = true;
           state.accountId = tokenData.accountId;
-          console.log('✅ Autenticação via callback (headless) concluída!');
+          state.llmClient = new LLMClient(state.openaiAuth);
+          console.log('✅ Autenticação OpenAI via callback concluída!');
         })
         .catch((err) => {
-          console.error('❌ Erro no fluxo headless de auth:', err.message);
+          console.error('❌ Erro no fluxo OpenAI:', err.message);
         });
 
-      // Retorna a URL para o frontend abrir
       res.json({ authUrl });
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Erro ao iniciar OAuth';
       console.error(msg);
-      // Se der erro ao subir o servidor (ex: porta em uso), retorna aqui
       res.status(500).json({ error: msg });
     }
   });
 
-  // GET /api/auth/callback — Callback do OAuth
+  // GET /api/auth/callback — Callback do OAuth OpenAI
   router.get('/callback', async (req: Request, res: Response) => {
     try {
       const code = req.query.code as string;
@@ -58,10 +59,13 @@ export function createAuthRoutes(state: ServerState): Router {
         return;
       }
 
-      const tokenData = await state.auth.exchangeCode(code, state.pendingOAuth.codeVerifier, state.pendingOAuth.redirectUri);
+      const tokenData = await state.openaiAuth.exchangeCode(code, state.pendingOAuth.codeVerifier, state.pendingOAuth.redirectUri);
       state.pendingOAuth = null;
+      state.auth = state.openaiAuth;
+      state.provider = 'openai';
       state.isAuthenticated = true;
       state.accountId = tokenData.accountId;
+      state.llmClient = new LLMClient(state.openaiAuth);
 
       res.send(`
         <!DOCTYPE html><html><body style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:system-ui;background:#09090B;color:#fff;">
@@ -74,11 +78,64 @@ export function createAuthRoutes(state: ServerState): Router {
     }
   });
 
+  // ─── Anthropic Routes ───
+
+  // POST /api/auth/anthropic/login — Gera URL de auth Anthropic
+  router.post('/anthropic/login', (_req: Request, res: Response) => {
+    try {
+      const { authUrl, codeVerifier, state: oauthState } = state.anthropicAuth.getAuthUrl();
+      state.pendingAnthropicOAuth = { codeVerifier, state: oauthState };
+      res.json({ authUrl });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Erro ao iniciar OAuth Anthropic';
+      res.status(500).json({ error: msg });
+    }
+  });
+
+  // POST /api/auth/anthropic/exchange — Troca code por tokens
+  router.post('/anthropic/exchange', async (req: Request, res: Response) => {
+    try {
+      const { code } = req.body as { code: string };
+
+      if (!code) {
+        res.status(400).json({ error: 'Código não fornecido' });
+        return;
+      }
+
+      if (!state.pendingAnthropicOAuth) {
+        res.status(400).json({ error: 'Nenhum fluxo OAuth Anthropic pendente. Faça login novamente.' });
+        return;
+      }
+
+      const { codeVerifier, state: oauthState } = state.pendingAnthropicOAuth;
+
+      const tokenData = await state.anthropicAuth.exchangeCode(code, codeVerifier, oauthState);
+      state.pendingAnthropicOAuth = null;
+      state.auth = state.anthropicAuth;
+      state.provider = 'anthropic';
+      state.isAuthenticated = true;
+      state.accountId = tokenData.accountId;
+      state.llmClient = new LLMClient(state.anthropicAuth);
+
+      res.json({
+        success: true,
+        accountId: tokenData.accountId,
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Erro na troca de tokens Anthropic';
+      console.error('❌ Erro Anthropic exchange:', msg);
+      res.status(500).json({ error: msg });
+    }
+  });
+
+  // ─── Common Routes ───
+
   // GET /api/auth/status
   router.get('/status', (_req: Request, res: Response) => {
     res.json({
       authenticated: state.isAuthenticated,
       accountId: state.accountId || undefined,
+      provider: state.provider,
     });
   });
 
@@ -87,6 +144,8 @@ export function createAuthRoutes(state: ServerState): Router {
     state.auth.clearTokens();
     state.isAuthenticated = false;
     state.accountId = null;
+    state.provider = null;
+    state.llmClient = null;
     res.json({ success: true });
   });
 

@@ -6,9 +6,10 @@ import { api } from '../../lib/api';
 
 interface HeaderProps {
   onOpenGraph?: () => void;
+  onLogin?: () => void;
 }
 
-export function Header({ onOpenGraph }: HeaderProps) {
+export function Header({ onOpenGraph, onLogin }: HeaderProps) {
   const {
     connectionStatus,
     dbInfo,
@@ -21,21 +22,8 @@ export function Header({ onOpenGraph }: HeaderProps) {
 
   const { theme, toggleTheme } = useThemeStore();
 
-  const handleLogin = async () => {
-    try {
-      const { authUrl } = await api.auth.login();
-      window.open(authUrl, '_blank', 'width=500,height=700');
-      const interval = setInterval(async () => {
-        const status = await api.auth.status();
-        if (status.authenticated) {
-          setAuthenticated(true, status.accountId);
-          clearInterval(interval);
-        }
-      }, 2000);
-      setTimeout(() => clearInterval(interval), 120000);
-    } catch (error) {
-      console.error('Login error:', error);
-    }
+  const handleLogin = () => {
+    onLogin?.();
   };
 
   const handleLogout = async () => {
