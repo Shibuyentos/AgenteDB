@@ -10,6 +10,7 @@ interface AppState {
   isAuthenticated: boolean;
   accountId: string | null;
   provider: 'openai' | 'anthropic' | null;
+  model: string | null;
 
   // Connection
   connections: Connection[];
@@ -29,6 +30,7 @@ interface AppState {
   readOnlyMode: boolean;
 
   // Actions
+  setModel: (model: string | null) => void;
   setAuthenticated: (status: boolean, accountId?: string, provider?: 'openai' | 'anthropic' | null) => void;
   setConnections: (conns: Connection[]) => void;
   addConnection: (conn: Connection) => void;
@@ -50,6 +52,7 @@ export const useAppStore = create<AppState>((set) => ({
   isAuthenticated: false,
   accountId: null,
   provider: null,
+  model: null,
 
   // Connection
   connections: [],
@@ -69,6 +72,7 @@ export const useAppStore = create<AppState>((set) => ({
   readOnlyMode: true,
 
   // Actions
+  setModel: (model) => set({ model }),
   setAuthenticated: (status, accountId, provider) =>
     set({ isAuthenticated: status, accountId: accountId || null, provider: provider ?? null }),
 

@@ -46,7 +46,23 @@ export function useWebSocket() {
             data: data.data,
             timestamp: new Date(),
           };
-          setMessages((prev) => [...prev, msg]);
+          setMessages((prev) => {
+            const isTransient = data.type === 'thinking' || data.type === 'executing';
+            if (!isTransient) {
+              // Remove the trailing thinking/executing indicator
+              const last = prev[prev.length - 1];
+              if (last && (last.type === 'thinking' || last.type === 'executing')) {
+                return [...prev.slice(0, -1), msg];
+              }
+              return [...prev, msg];
+            }
+            // Replace existing thinking/executing with new one
+            const last = prev[prev.length - 1];
+            if (last && (last.type === 'thinking' || last.type === 'executing')) {
+              return [...prev.slice(0, -1), msg];
+            }
+            return [...prev, msg];
+          });
         } catch {
           console.error('[WS] Failed to parse message');
         }

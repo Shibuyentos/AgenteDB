@@ -243,6 +243,7 @@ export class LLMClient {
   private auth: IAuthProvider;
   private conversationHistory: LLMMessage[] = [];
   private systemPrompt: string = '';
+  private modelOverride: string | null = null;
 
   constructor(auth: IAuthProvider) {
     this.auth = auth;
@@ -250,6 +251,19 @@ export class LLMClient {
 
   setSystemPrompt(prompt: string): void {
     this.systemPrompt = prompt;
+  }
+
+  setModel(model: string): void {
+    this.modelOverride = model;
+  }
+
+  getModel(): string {
+    const provider = this.auth.getProvider();
+    if (this.modelOverride) return this.modelOverride;
+    if (provider === 'anthropic') {
+      return process.env.ANTHROPIC_MODEL || getAuth()?.model || DEFAULT_ANTHROPIC_MODEL;
+    }
+    return normalizeModelName(process.env.OPENAI_MODEL || getAuth()?.model || DEFAULT_MODEL);
   }
 
   async chat(userMessage: string): Promise<LLMResponse> {
@@ -353,7 +367,7 @@ export class LLMClient {
       content: m.content,
     }));
 
-    const model = process.env.ANTHROPIC_MODEL || getAuth()?.model || DEFAULT_ANTHROPIC_MODEL;
+    const model = this.modelOverride || process.env.ANTHROPIC_MODEL || getAuth()?.model || DEFAULT_ANTHROPIC_MODEL;
 
     const requestBody = JSON.stringify({
       model,
@@ -435,9 +449,9 @@ export class LLMClient {
 
     const input = convertToResponsesInput(this.conversationHistory);
 
-    const model = normalizeModelName(
-      process.env.OPENAI_MODEL || getAuth()?.model || DEFAULT_MODEL
-    );
+    const model = this.modelOverride
+      ? normalizeModelName(this.modelOverride)
+      : normalizeModelName(process.env.OPENAI_MODEL || getAuth()?.model || DEFAULT_MODEL);
 
     const requestBody = JSON.stringify({
       model,

@@ -128,14 +128,45 @@ export function createAuthRoutes(state: ServerState): Router {
     }
   });
 
+  // ─── Model Routes ───
+
+  // GET /api/auth/model — retorna modelo atual e opcoes
+  router.get('/model', (_req: Request, res: Response) => {
+    const currentModel = state.llmClient?.getModel() || null;
+    const models: Record<string, string[]> = {
+      anthropic: ['claude-sonnet-4-6', 'claude-opus-4-6', 'claude-haiku-4-5'],
+      openai: ['gpt-5-codex'],
+    };
+    res.json({
+      current: currentModel,
+      provider: state.provider,
+      available: state.provider ? models[state.provider] || [] : [],
+    });
+  });
+
+  // POST /api/auth/model — troca o modelo
+  router.post('/model', (req: Request, res: Response) => {
+    const { model } = req.body as { model: string };
+    if (!model) {
+      res.status(400).json({ error: 'Modelo nao especificado' });
+      return;
+    }
+    if (state.llmClient) {
+      state.llmClient.setModel(model);
+    }
+    res.json({ success: true, model });
+  });
+
   // ─── Common Routes ───
 
   // GET /api/auth/status
   router.get('/status', (_req: Request, res: Response) => {
+    const currentModel = state.llmClient?.getModel() || null;
     res.json({
       authenticated: state.isAuthenticated,
       accountId: state.accountId || undefined,
       provider: state.provider,
+      model: currentModel,
     });
   });
 
