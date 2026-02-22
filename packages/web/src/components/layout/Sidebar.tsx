@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   PlugZap, TableProperties, History, ChevronLeft, ChevronRight,
   Plus, Plug, Trash2, Table2, Eye, Search, Play, Copy,
-  MoreHorizontal, Loader2, FileCode2,
+  MoreHorizontal, Loader2, FileCode2, MessageSquare,
 } from 'lucide-react';
 import { useAppStore, type SidebarTab } from '../../stores/app-store';
 import { api } from '../../lib/api';
@@ -10,7 +10,7 @@ import { Badge, Input } from '../ui';
 import { ConnectionModal } from '../modals/ConnectionModal';
 import type { QueryHistoryEntry, TableSummary, SqlScript } from '../../types';
 
-const tabs: { id: SidebarTab; icon: React.ReactNode; label: string }[] = [
+const tabs: { id: SidebarTab; icon: React.ReactNode; label: string; page?: string }[] = [
   { id: 'connections', icon: <PlugZap className="w-5 h-5" />, label: 'Conexões' },
   { id: 'schema', icon: <TableProperties className="w-5 h-5" />, label: 'Schema' },
   { id: 'history', icon: <History className="w-5 h-5" />, label: 'Histórico' },
@@ -24,6 +24,7 @@ export function Sidebar() {
   const connections = useAppStore((s) => s.connections);
   const activeConnection = useAppStore((s) => s.activeConnection);
   const schemaMap = useAppStore((s) => s.schemaMap);
+  const activePage = useAppStore((s) => s.activePage);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const setSidebarTab = useAppStore((s) => s.setSidebarTab);
   const setConnections = useAppStore((s) => s.setConnections);
@@ -124,6 +125,22 @@ export function Sidebar() {
       >
         {/* Tab icons */}
         <div className="flex flex-col items-center w-12 py-2 border-r border-border/50 gap-1 shrink-0">
+          {/* Chat button - always at top */}
+          <button
+            onClick={() => setActivePage('chat')}
+            className={`
+              p-2 rounded-lg transition-colors duration-150 cursor-pointer mb-1
+              ${activePage === 'chat'
+                ? 'text-brand bg-brand/10'
+                : 'text-text-muted hover:text-text-primary hover:bg-bg-elevated'}
+            `}
+            title="Chat"
+          >
+            <MessageSquare className="w-5 h-5" />
+          </button>
+
+          <div className="w-6 border-t border-border/50 mb-1" />
+
           {tabs.map(tab => (
             <button
               key={tab.id}

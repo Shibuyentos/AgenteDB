@@ -1,7 +1,9 @@
 import { useRef, useEffect, useState } from 'react';
 import { Send, MessageSquare, Trash2 } from 'lucide-react';
 import { ChatMessage } from '../components/chat/ChatMessage';
+import { MentionDropdown } from '../components/chat/MentionDropdown';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { useMentionAutocomplete } from '../hooks/useMentionAutocomplete';
 import { useAppStore } from '../stores/app-store';
 
 export function ChatPage() {
@@ -10,6 +12,9 @@ export function ChatPage() {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Mention autocomplete
+  const mention = useMentionAutocomplete({ input, setInput, textareaRef });
 
   // Auto-scroll
   useEffect(() => {
@@ -32,6 +37,9 @@ export function ChatPage() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Let mention autocomplete consume keyboard events first
+    if (mention.handleKeyDown(e)) return;
+
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       handleSend();
@@ -116,12 +124,23 @@ export function ChatPage() {
             )}
 
             <div className="flex-1 relative">
+              {/* Mention Autocomplete Dropdown */}
+              {mention.isOpen && (
+                <MentionDropdown
+                  items={mention.items}
+                  selectedIndex={mention.selectedIndex}
+                  onSelect={mention.insertMention}
+                  listRef={mention.listRef}
+                  query={mention.query}
+                />
+              )}
+
               <textarea
                 ref={textareaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={notConnected ? 'Conecte a um banco primeiro...' : 'Digite sua pergunta...'}
+                placeholder={notConnected ? 'Conecte a um banco primeiro...' : 'Use @ para referenciar tabelas...'}
                 disabled={notConnected}
                 rows={1}
                 className="
@@ -149,7 +168,7 @@ export function ChatPage() {
 
           <div className="flex items-center justify-between mt-1.5 px-1">
             <span className="text-[10px] text-text-muted">
-              Ctrl+Enter para enviar
+              Ctrl+Enter para enviar · <span className="text-brand/60">@</span> para mencionar tabelas
             </span>
             <div className="flex items-center gap-2">
               {!isConnected && (
