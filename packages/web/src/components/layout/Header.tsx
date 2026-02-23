@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { Database, Lock, LockOpen, User, LogOut, GitFork, ChevronDown } from 'lucide-react';
 import { useAppStore } from '../../stores/app-store';
 import { api } from '../../lib/api';
@@ -34,19 +34,17 @@ interface HeaderProps {
   onLogin?: () => void;
 }
 
-export function Header({ onOpenGraph, onLogin }: HeaderProps) {
-  const {
-    connectionStatus,
-    dbInfo,
-    isAuthenticated,
-    accountId,
-    provider,
-    model,
-    readOnlyMode,
-    toggleReadOnly,
-    setAuthenticated,
-    setModel,
-  } = useAppStore();
+export const Header = memo(function Header({ onOpenGraph, onLogin }: HeaderProps) {
+  const connectionStatus = useAppStore((s) => s.connectionStatus);
+  const dbInfo = useAppStore((s) => s.dbInfo);
+  const isAuthenticated = useAppStore((s) => s.isAuthenticated);
+  const accountId = useAppStore((s) => s.accountId);
+  const provider = useAppStore((s) => s.provider);
+  const model = useAppStore((s) => s.model);
+  const readOnlyMode = useAppStore((s) => s.readOnlyMode);
+  const toggleReadOnly = useAppStore((s) => s.toggleReadOnly);
+  const setAuthenticated = useAppStore((s) => s.setAuthenticated);
+  const setModel = useAppStore((s) => s.setModel);
 
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [availableModels, setAvailableModels] = useState<{ label: string; value: string }[]>([]);
@@ -84,6 +82,7 @@ export function Header({ onOpenGraph, onLogin }: HeaderProps) {
   }, [isAuthenticated, provider, setModel]);
 
   useEffect(() => {
+    if (!modelDropdownOpen) return;
     const handleClick = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setModelDropdownOpen(false);
@@ -91,9 +90,9 @@ export function Header({ onOpenGraph, onLogin }: HeaderProps) {
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
+  }, [modelDropdownOpen]);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     try {
       await api.auth.logout();
       setAuthenticated(false);
@@ -101,9 +100,9 @@ export function Header({ onOpenGraph, onLogin }: HeaderProps) {
     } catch (error) {
       console.error('Logout error:', error);
     }
-  };
+  }, [setAuthenticated, setModel]);
 
-  const handleModelChange = async (newModel: string) => {
+  const handleModelChange = useCallback(async (newModel: string) => {
     try {
       await api.auth.setModel(newModel);
       setModel(newModel);
@@ -111,7 +110,7 @@ export function Header({ onOpenGraph, onLogin }: HeaderProps) {
     } catch (error) {
       console.error('Model change error:', error);
     }
-  };
+  }, [setModel]);
 
   const currentModelLabel = model ? prettifyModelLabel(model) : 'Modelo';
 
@@ -139,7 +138,7 @@ export function Header({ onOpenGraph, onLogin }: HeaderProps) {
               {onOpenGraph && (
                 <button
                   onClick={onOpenGraph}
-                  className="p-1 rounded-lg text-text-muted hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                  className="p-1 rounded-lg text-text-muted hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
                 >
                   <GitFork className="w-3.5 h-3.5" />
                 </button>
@@ -158,10 +157,10 @@ export function Header({ onOpenGraph, onLogin }: HeaderProps) {
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setModelDropdownOpen((v) => !v)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-bold tracking-wider uppercase transition-all duration-300 cursor-pointer border bg-[#09090b] text-white border-white/10 hover:bg-[#18181b] hover:border-white/30"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-bold tracking-wider uppercase transition-colors duration-200 cursor-pointer border bg-[#09090b] text-white border-white/10 hover:bg-[#18181b] hover:border-white/30"
             >
               {currentModelLabel}
-              <ChevronDown className={`w-3 h-3 transition-transform duration-300 ${modelDropdownOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${modelDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {modelDropdownOpen && (
@@ -173,7 +172,7 @@ export function Header({ onOpenGraph, onLogin }: HeaderProps) {
                   <button
                     key={opt.value}
                     onClick={() => handleModelChange(opt.value)}
-                    className={`w-[calc(100%-16px)] mx-2 text-left px-3 py-2 text-xs rounded-lg transition-all cursor-pointer mb-0.5 ${model === opt.value ? 'bg-white text-black font-semibold' : 'text-text-secondary hover:text-white hover:bg-white/5'}`}
+                    className={`w-[calc(100%-16px)] mx-2 text-left px-3 py-2 text-xs rounded-lg transition-colors cursor-pointer mb-0.5 ${model === opt.value ? 'bg-white text-black font-semibold' : 'text-text-secondary hover:text-white hover:bg-white/5'}`}
                   >
                     {opt.label}
                   </button>
@@ -185,7 +184,7 @@ export function Header({ onOpenGraph, onLogin }: HeaderProps) {
 
         <button
           onClick={toggleReadOnly}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-bold tracking-wider uppercase transition-all duration-300 cursor-pointer border ${readOnlyMode ? 'bg-[#09090b] text-white border-white/20 hover:bg-[#18181b]' : 'bg-white text-black border-white/20 hover:bg-gray-200'}`}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-bold tracking-wider uppercase transition-colors duration-200 cursor-pointer border ${readOnlyMode ? 'bg-[#09090b] text-white border-white/20 hover:bg-[#18181b]' : 'bg-white text-black border-white/20 hover:bg-gray-200'}`}
         >
           {readOnlyMode ? <Lock className="w-3.5 h-3.5" /> : <LockOpen className="w-3.5 h-3.5" />}
           {readOnlyMode ? 'SOMENTE LEITURA' : 'MODO ESCRITA'}
@@ -203,7 +202,7 @@ export function Header({ onOpenGraph, onLogin }: HeaderProps) {
             </div>
             <button
               onClick={handleLogout}
-              className="p-2 rounded-xl text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
+              className="p-2 rounded-xl text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -220,4 +219,4 @@ export function Header({ onOpenGraph, onLogin }: HeaderProps) {
       </div>
     </header>
   );
-}
+});

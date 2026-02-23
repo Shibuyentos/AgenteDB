@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react';
 import type { ChatMessage } from '../types';
 
 const MAX_MESSAGES = 150;
@@ -59,12 +59,9 @@ export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const closedIntentionallyRef = useRef(false);
-
-  const clearTransientMessages = useCallback(() => {
-    setMessages((prev) =>
-      prev.filter((m) => m.type !== 'thinking' && m.type !== 'executing')
-    );
-  }, []);
+  // Keep stable refs for values used inside callbacks
+  const isBusyRef = useRef(false);
+  isBusyRef.current = isBusy;
 
   const setRunState = useCallback(
     (phase: RunPhase, busy: boolean, detail?: string) => {
@@ -72,10 +69,15 @@ export function useWebSocket() {
       setIsBusy(busy);
       setRunDetail(detail || '');
       if (!busy) {
-        clearTransientMessages();
+        // Clear transient messages efficiently
+        setMessages((prev) => {
+          const hasTransient = prev.some(m => m.type === 'thinking' || m.type === 'executing');
+          if (!hasTransient) return prev; // No change needed, avoid re-render
+          return prev.filter((m) => m.type !== 'thinking' && m.type !== 'executing');
+        });
       }
     },
-    [clearTransientMessages]
+    []
   );
 
   const addMessage = useCallback((msg: ChatMessage) => {
@@ -91,9 +93,11 @@ export function useWebSocket() {
         };
       }
 
-      const filtered = prev.filter(
-        (m) => m.type !== 'thinking' && m.type !== 'executing'
-      );
+      // Only filter if there are transient messages
+      const hasTransient = prev.some(m => m.type === 'thinking' || m.type === 'executing');
+      const filtered = hasTransient
+        ? prev.filter((m) => m.type !== 'thinking' && m.type !== 'executing')
+        : prev;
       const next = [...filtered, nextMsg];
 
       if (next.length > MAX_MESSAGES) {
@@ -211,7 +215,7 @@ export function useWebSocket() {
   const sendMessage = useCallback(
     (content: string): boolean => {
       const trimmed = content.trim();
-      if (!trimmed || isBusy) return false;
+      if (!trimmed || isBusyRef.current) return false;
 
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         const userMsg: ChatMessage = {
@@ -229,16 +233,16 @@ export function useWebSocket() {
 
       return false;
     },
-    [addMessage, isBusy, setRunState]
+    [addMessage, setRunState]
   );
 
   const cancelRun = useCallback(() => {
-    if (!isBusy) return;
+    if (!isBusyRef.current) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'cancel' }));
       setRunDetail('Cancelando execucao...');
     }
-  }, [isBusy]);
+  }, []);
 
   const clearMessages = useCallback(() => {
     setMessages([]);

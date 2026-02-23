@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, memo } from 'react';
 import { CheckCircle2, XCircle, Info, X } from 'lucide-react';
 import { useToastStore, type Toast as ToastType } from '../../hooks/useToast';
 
@@ -20,21 +20,17 @@ const iconColors = {
   info: 'text-cyan-400',
 };
 
-function ToastItem({ toast, onRemove }: { toast: ToastType; onRemove: () => void }) {
-  const [progress, setProgress] = useState(100);
+const progressColors = {
+  success: 'bg-emerald-500',
+  error: 'bg-red-500',
+  info: 'bg-cyan-500',
+};
+
+// Use a CSS animation for the progress bar instead of setInterval
+// This avoids dozens of re-renders per toast
+const ToastItem = memo(function ToastItem({ toast, onRemove }: { toast: ToastType; onRemove: () => void }) {
   const Icon = icons[toast.type];
   const duration = toast.duration || 4000;
-
-  useEffect(() => {
-    const start = Date.now();
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - start;
-      const remaining = Math.max(0, 100 - (elapsed / duration) * 100);
-      setProgress(remaining);
-      if (remaining <= 0) clearInterval(interval);
-    }, 50);
-    return () => clearInterval(interval);
-  }, [duration]);
 
   return (
     <div className={`
@@ -47,19 +43,19 @@ function ToastItem({ toast, onRemove }: { toast: ToastType; onRemove: () => void
       <button onClick={onRemove} className="shrink-0 text-text-muted hover:text-text-primary transition-colors cursor-pointer">
         <X className="w-3 h-3" />
       </button>
-      {/* Progress bar */}
+      {/* CSS-animated progress bar — zero re-renders */}
       <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-border/30 rounded-b-lg overflow-hidden">
         <div
-          className={`h-full transition-all ease-linear ${
-            toast.type === 'success' ? 'bg-emerald-500' :
-            toast.type === 'error' ? 'bg-red-500' : 'bg-cyan-500'
-          }`}
-          style={{ width: `${progress}%` }}
+          className={`h-full ${progressColors[toast.type]}`}
+          style={{
+            width: '100%',
+            animation: `toast-progress ${duration}ms linear forwards`,
+          }}
         />
       </div>
     </div>
   );
-}
+});
 
 export function ToastContainer() {
   const { toasts, removeToast } = useToastStore();
@@ -67,10 +63,19 @@ export function ToastContainer() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2">
-      {toasts.map((toast) => (
-        <ToastItem key={toast.id} toast={toast} onRemove={() => removeToast(toast.id)} />
-      ))}
-    </div>
+    <>
+      {/* Inject keyframes once */}
+      <style>{`
+        @keyframes toast-progress {
+          from { width: 100%; }
+          to { width: 0%; }
+        }
+      `}</style>
+      <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2">
+        {toasts.map((toast) => (
+          <ToastItem key={toast.id} toast={toast} onRemove={() => removeToast(toast.id)} />
+        ))}
+      </div>
+    </>
   );
 }

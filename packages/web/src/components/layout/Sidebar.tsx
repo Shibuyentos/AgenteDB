@@ -1,15 +1,15 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import {
   PlugZap, TableProperties, History, ChevronLeft, ChevronRight,
   Plus, Plug, Trash2, Table2, Eye, Search, Play, Copy,
-  MoreHorizontal, Loader2, FileCode2, MessageSquare, FolderOpen,
+  Loader2, FileCode2, MessageSquare, FolderOpen,
 } from 'lucide-react';
 import { useAppStore, type SidebarTab } from '../../stores/app-store';
 import { api } from '../../lib/api';
 import { ConnectionModal } from '../modals/ConnectionModal';
 import type { QueryHistoryEntry, TableSummary, SqlScript } from '../../types';
 
-const tabs: { id: SidebarTab; icon: React.ReactNode; label: string; page?: string }[] = [
+const tabs: { id: SidebarTab; icon: React.ReactNode; label: string }[] = [
   { id: 'connections', icon: <PlugZap className="w-5 h-5" />, label: 'Conexões' },
   { id: 'schema', icon: <TableProperties className="w-5 h-5" />, label: 'Schema' },
   { id: 'history', icon: <History className="w-5 h-5" />, label: 'Histórico' },
@@ -63,13 +63,14 @@ export function Sidebar() {
     }
   }, [sidebarTab]);
 
-  const handleConnect = async (name: string) => {
+  const handleConnect = useCallback(async (name: string) => {
     setConnectingName(name);
     setConnectionStatus('connecting');
     try {
       const result = await api.connections.connect(name);
       setConnectionStatus('connected');
-      setActiveConnection(connections.find(c => c.name === name) || null);
+      const conn = useAppStore.getState().connections.find(c => c.name === name) || null;
+      setActiveConnection(conn);
       setDbInfo({
         database: result.database,
         version: result.version,
@@ -88,25 +89,26 @@ export function Sidebar() {
     } finally {
       setConnectingName(null);
     }
-  };
+  }, [setConnectionStatus, setActiveConnection, setDbInfo, setIsLoadingSchema, setSchemaMap, setSidebarTab]);
 
-  const handleDeleteConnection = async (name: string) => {
+  const handleDeleteConnection = useCallback(async (name: string) => {
     try {
       await api.connections.remove(name);
       removeConn(name);
     } catch (error) {
       console.error('Delete error:', error);
     }
-  };
+  }, [removeConn]);
 
   // ─── Schema Tree (memoized) ───
   const schemaGroups = useMemo(() => {
     if (!schemaMap) return [];
+    const searchLower = schemaSearch.toLowerCase();
     return schemaMap.schemas.map(schema => {
       const schemaTables = schemaMap.tables
         .filter(t => t.schema === schema)
         .filter(t =>
-          !schemaSearch || t.name.toLowerCase().includes(schemaSearch.toLowerCase())
+          !schemaSearch || t.name.toLowerCase().includes(searchLower)
         );
       const tablesOnly = schemaTables.filter(t => t.type === 'table');
       const viewsOnly = schemaTables.filter(t => t.type === 'view');
@@ -114,21 +116,31 @@ export function Sidebar() {
     }).filter(g => g.tables.length > 0 || g.views.length > 0);
   }, [schemaMap, schemaSearch]);
 
+  const handleTabClick = useCallback((tabId: SidebarTab) => {
+    if (!sidebarOpen) toggleSidebar();
+    setSidebarTab(tabId);
+  }, [sidebarOpen, toggleSidebar, setSidebarTab]);
+
+  const handleChatClick = useCallback(() => {
+    setActivePage('chat');
+  }, [setActivePage]);
+
   return (
     <>
       <div
         className={`
-          flex shrink-0 bg-[#000000] border-r border-white/10 transition-all duration-300 ease-out h-full
+          flex shrink-0 bg-[#000000] border-r border-white/10 h-full
           ${sidebarOpen ? 'w-[280px]' : 'w-16'}
         `}
+        style={{ transition: 'width 300ms cubic-bezier(0.4, 0, 0.2, 1)' }}
       >
         {/* Tab icons */}
         <div className="flex flex-col items-center w-14 py-4 border-r border-white/5 gap-2 shrink-0 bg-white/[0.02]">
           {/* Chat button - always at top */}
           <button
-            onClick={() => setActivePage('chat')}
+            onClick={handleChatClick}
             className={`
-              w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-300 cursor-pointer mb-2
+              w-10 h-10 flex items-center justify-center rounded-xl transition-colors duration-200 cursor-pointer mb-2
               ${activePage === 'chat'
                 ? 'bg-gradient-brand text-white glow-brand scale-110 shadow-glow-sm'
                 : 'text-text-muted hover:text-text-primary hover:bg-white/5'}
@@ -143,12 +155,9 @@ export function Sidebar() {
           {tabs.map(tab => (
             <button
               key={tab.id}
-              onClick={() => {
-                if (!sidebarOpen) toggleSidebar();
-                setSidebarTab(tab.id);
-              }}
+              onClick={() => handleTabClick(tab.id)}
               className={`
-                w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-300 cursor-pointer
+                w-10 h-10 flex items-center justify-center rounded-xl transition-colors duration-200 cursor-pointer
                 ${sidebarTab === tab.id && sidebarOpen
                   ? 'bg-gradient-brand text-white glow-brand shadow-glow-sm scale-110'
                   : 'text-text-muted hover:text-text-primary hover:bg-white/5'}
@@ -163,7 +172,7 @@ export function Sidebar() {
 
           <button
             onClick={toggleSidebar}
-            className="w-10 h-10 flex items-center justify-center rounded-xl text-text-muted hover:text-text-primary hover:bg-white/5 transition-all cursor-pointer"
+            className="w-10 h-10 flex items-center justify-center rounded-xl text-text-muted hover:text-text-primary hover:bg-white/5 transition-colors cursor-pointer"
           >
             {sidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
           </button>
@@ -171,7 +180,7 @@ export function Sidebar() {
 
         {/* Content */}
         {sidebarOpen && (
-          <div className="flex-1 flex flex-col overflow-hidden animate-fadeIn duration-500 min-w-0 bg-black/20">
+          <div className="flex-1 flex flex-col overflow-hidden min-w-0 bg-black/20">
             {/* ─── Connections Tab ─── */}
             {sidebarTab === 'connections' && (
               <div className="flex flex-col h-full">
@@ -181,7 +190,7 @@ export function Sidebar() {
                   </span>
                   <button
                     onClick={() => setShowAddModal(true)}
-                    className="p-1.5 rounded-lg text-text-muted hover:text-brand hover:bg-brand/10 transition-all cursor-pointer border border-transparent hover:border-brand/20 shadow-glow-sm"
+                    className="p-1.5 rounded-lg text-text-muted hover:text-brand hover:bg-brand/10 transition-colors cursor-pointer border border-transparent hover:border-brand/20 shadow-glow-sm"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
@@ -206,10 +215,10 @@ export function Sidebar() {
                           key={conn.name}
                           className={`
                             group flex items-center gap-3 px-3 py-2.5 rounded-xl
-                            transition-all duration-300 cursor-pointer border
+                            transition-colors duration-200 cursor-pointer border
                             ${isActive
-                              ? 'bg-gradient-brand-subtle border-brand/20 glow-brand shadow-glow-sm translate-x-1'
-                              : 'border-transparent hover:bg-white/5 hover:border-white/10 hover:translate-x-1'}
+                              ? 'bg-gradient-brand-subtle border-brand/20 glow-brand shadow-glow-sm'
+                              : 'border-transparent hover:bg-white/5 hover:border-white/10'}
                           `}
                         >
                           <div className={`
@@ -237,7 +246,7 @@ export function Sidebar() {
                           ) : (
                             <button
                               onClick={(e) => { e.stopPropagation(); handleDeleteConnection(conn.name); }}
-                              className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
+                              className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-opacity cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -261,7 +270,7 @@ export function Sidebar() {
                       placeholder="Buscar tabelas..."
                       value={schemaSearch}
                       onChange={(e) => setSchemaSearch(e.target.value)}
-                      className="w-full bg-white/5 border border-white/5 focus:border-brand/40 focus:ring-1 focus:ring-brand/20 rounded-xl pl-9 pr-4 py-2 text-[11px] text-text-primary placeholder:text-text-muted outline-none transition-all duration-300 focus-glow"
+                      className="w-full bg-white/5 border border-white/5 focus:border-brand/40 focus:ring-1 focus:ring-brand/20 rounded-xl pl-9 pr-4 py-2 text-[11px] text-text-primary placeholder:text-text-muted outline-none transition-colors duration-200 focus-glow"
                     />
                   </div>
                 </div>
@@ -288,100 +297,12 @@ export function Sidebar() {
 
             {/* ─── History Tab ─── */}
             {sidebarTab === 'history' && (
-              <div className="flex flex-col h-full">
-                <div className="flex items-center justify-between px-4 py-4 border-b border-white/5">
-                  <span className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">
-                    Histórico
-                  </span>
-                  <button
-                    onClick={async () => {
-                      await api.query.clearHistory();
-                      setHistory([]);
-                    }}
-                    className="text-[10px] font-bold text-text-muted hover:text-red-400 transition-all cursor-pointer px-2 py-1 rounded-lg hover:bg-white/5"
-                  >
-                    LIMPAR
-                  </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto py-3 px-2 space-y-2">
-                  {history.length === 0 ? (
-                    <div className="px-4 py-12 text-center text-text-muted text-[11px] italic">
-                      Nenhuma query no histórico.
-                    </div>
-                  ) : (
-                    history.map((item, i) => (
-                      <div
-                        key={i}
-                        className="group p-3 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-white/10 transition-all duration-300 cursor-pointer"
-                      >
-                        <div className="font-mono text-[11px] text-text-primary truncate mb-2 opacity-80 group-hover:opacity-100">
-                          {item.sql}
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-[9px] font-bold text-text-muted tracking-tight">
-                            <span className="flex items-center gap-1"><Play className="w-2.5 h-2.5" /> {item.duration}ms</span>
-                            <span>•</span>
-                            <span className="px-1.5 py-0.5 rounded bg-white/5">{item.rowCount} ROWS</span>
-                          </div>
-                          <button
-                            onClick={() => navigator.clipboard.writeText(item.sql)}
-                            className="p-1 px-2 rounded-lg bg-white/5 text-text-muted hover:text-brand hover:bg-brand/10 transition-all cursor-pointer border border-transparent hover:border-brand/20"
-                          >
-                            <Copy className="w-3 h-3" />
-                          </button>
-                        </div>
-                        {item.error && (
-                          <div className="mt-2 text-[9px] font-black tracking-widest text-red-400 uppercase">FAILED TO EXECUTE</div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+              <HistoryTab history={history} setHistory={setHistory} />
             )}
 
             {/* ─── Scripts Tab ─── */}
             {sidebarTab === 'scripts' && (
-              <div className="flex flex-col h-full">
-                <div className="flex items-center justify-between px-4 py-4 border-b border-white/5">
-                  <span className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">
-                    Scripts
-                  </span>
-                  <button
-                    onClick={() => setActivePage('scripts')}
-                    className="text-[10px] font-bold text-brand hover:text-brand-hover transition-all cursor-pointer px-2 py-1 rounded-lg hover:bg-brand/5 border border-transparent hover:border-brand/20 glow-brand shadow-glow-sm"
-                  >
-                    EDITOR
-                  </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto py-3 px-2 space-y-1.5">
-                  {scriptsList.length === 0 ? (
-                    <div className="px-4 py-12 text-center text-text-muted text-[11px] italic">
-                      Nenhum script salvo.
-                    </div>
-                  ) : (
-                    scriptsList.map(script => (
-                      <button
-                        key={script.id}
-                        onClick={() => setActivePage('scripts')}
-                        className="flex items-center gap-3 w-full p-3 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-brand/20 transition-all duration-300 cursor-pointer group text-left shadow-hover"
-                      >
-                        <div className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center text-text-muted group-hover:text-brand group-hover:bg-brand/5 transition-all">
-                          <FileCode2 className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-bold text-text-primary group-hover:text-brand transition-colors truncate">{script.name}</div>
-                          <div className="text-[10px] text-text-muted font-mono truncate opacity-60 mt-0.5">
-                            {script.sql ? script.sql.substring(0, 40) : 'vazio'}
-                          </div>
-                        </div>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
+              <ScriptsTab scriptsList={scriptsList} setActivePage={setActivePage} />
             )}
           </div>
         )}
@@ -396,9 +317,136 @@ export function Sidebar() {
   );
 }
 
-// ─── Schema Tree Group ───
+// ─── History Tab (memoized) ───
+const HistoryTab = memo(function HistoryTab({
+  history,
+  setHistory,
+}: {
+  history: QueryHistoryEntry[];
+  setHistory: (h: QueryHistoryEntry[]) => void;
+}) {
+  const handleClear = useCallback(async () => {
+    await api.query.clearHistory();
+    setHistory([]);
+  }, [setHistory]);
 
-function SchemaGroup({
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between px-4 py-4 border-b border-white/5">
+        <span className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">
+          Histórico
+        </span>
+        <button
+          onClick={handleClear}
+          className="text-[10px] font-bold text-text-muted hover:text-red-400 transition-colors cursor-pointer px-2 py-1 rounded-lg hover:bg-white/5"
+        >
+          LIMPAR
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto py-3 px-2 space-y-2">
+        {history.length === 0 ? (
+          <div className="px-4 py-12 text-center text-text-muted text-[11px] italic">
+            Nenhuma query no histórico.
+          </div>
+        ) : (
+          history.map((item, i) => (
+            <HistoryItem key={i} item={item} />
+          ))
+        )}
+      </div>
+    </div>
+  );
+});
+
+const HistoryItem = memo(function HistoryItem({ item }: { item: QueryHistoryEntry }) {
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(item.sql);
+  }, [item.sql]);
+
+  return (
+    <div className="group p-3 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-white/10 transition-colors duration-200 cursor-pointer">
+      <div className="font-mono text-[11px] text-text-primary truncate mb-2 opacity-80 group-hover:opacity-100">
+        {item.sql}
+      </div>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-[9px] font-bold text-text-muted tracking-tight">
+          <span className="flex items-center gap-1"><Play className="w-2.5 h-2.5" /> {item.duration}ms</span>
+          <span>•</span>
+          <span className="px-1.5 py-0.5 rounded bg-white/5">{item.rowCount} ROWS</span>
+        </div>
+        <button
+          onClick={handleCopy}
+          className="p-1 px-2 rounded-lg bg-white/5 text-text-muted hover:text-brand hover:bg-brand/10 transition-colors cursor-pointer border border-transparent hover:border-brand/20"
+        >
+          <Copy className="w-3 h-3" />
+        </button>
+      </div>
+      {item.error && (
+        <div className="mt-2 text-[9px] font-black tracking-widest text-red-400 uppercase">FAILED TO EXECUTE</div>
+      )}
+    </div>
+  );
+});
+
+// ─── Scripts Tab (memoized) ───
+const ScriptsTab = memo(function ScriptsTab({
+  scriptsList,
+  setActivePage,
+}: {
+  scriptsList: SqlScript[];
+  setActivePage: (page: any) => void;
+}) {
+  const handleOpenEditor = useCallback(() => {
+    setActivePage('scripts');
+  }, [setActivePage]);
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between px-4 py-4 border-b border-white/5">
+        <span className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">
+          Scripts
+        </span>
+        <button
+          onClick={handleOpenEditor}
+          className="text-[10px] font-bold text-brand hover:text-brand-hover transition-colors cursor-pointer px-2 py-1 rounded-lg hover:bg-brand/5 border border-transparent hover:border-brand/20 glow-brand shadow-glow-sm"
+        >
+          EDITOR
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto py-3 px-2 space-y-1.5">
+        {scriptsList.length === 0 ? (
+          <div className="px-4 py-12 text-center text-text-muted text-[11px] italic">
+            Nenhum script salvo.
+          </div>
+        ) : (
+          scriptsList.map(script => (
+            <button
+              key={script.id}
+              onClick={handleOpenEditor}
+              className="flex items-center gap-3 w-full p-3 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-brand/20 transition-colors duration-200 cursor-pointer group text-left"
+            >
+              <div className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center text-text-muted group-hover:text-brand group-hover:bg-brand/5 transition-colors">
+                <FileCode2 className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-bold text-text-primary group-hover:text-brand transition-colors truncate">{script.name}</div>
+                <div className="text-[10px] text-text-muted font-mono truncate opacity-60 mt-0.5">
+                  {script.sql ? script.sql.substring(0, 40) : 'vazio'}
+                </div>
+              </div>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+});
+
+// ─── Schema Tree Group (memoized) ───
+
+const SchemaGroup = memo(function SchemaGroup({
   schema, tables, views, onSelectTable,
 }: {
   schema: string;
@@ -408,16 +456,20 @@ function SchemaGroup({
 }) {
   const [expanded, setExpanded] = useState(true);
 
+  const handleToggle = useCallback(() => {
+    setExpanded(prev => !prev);
+  }, []);
+
   return (
     <div className="px-2 py-0.5 space-y-0.5">
       <button
-        onClick={() => setExpanded(!expanded)}
+        onClick={handleToggle}
         className={`
-          flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-[11px] font-bold tracking-wide transition-all duration-300 cursor-pointer
-          ${expanded ? 'text-text-primary bg-white/5 shadow-inner' : 'text-text-muted hover:text-text-primary hover:bg-white/[0.03]'}
+          flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-[11px] font-bold tracking-wide transition-colors duration-200 cursor-pointer
+          ${expanded ? 'text-text-primary bg-white/5' : 'text-text-muted hover:text-text-primary hover:bg-white/[0.03]'}
         `}
       >
-        <div className={`transition-transform duration-300 ${expanded ? 'rotate-90' : ''}`}>
+        <div className={`transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`}>
           <ChevronRight className="w-3.5 h-3.5" />
         </div>
         <FolderOpen className={`w-3.5 h-3.5 ${expanded ? 'text-amber-400' : 'text-text-muted'}`} />
@@ -428,44 +480,57 @@ function SchemaGroup({
       </button>
 
       {expanded && (
-        <div className="ml-5 p-1 space-y-0.5 animate-fadeInUp">
-          {tables.length > 0 && (
-            <>
-              {tables.map(t => (
-                <button
-                  key={t.name}
-                  onClick={() => onSelectTable(schema, t.name)}
-                  className="group flex items-center gap-3 w-full px-3 py-2 rounded-xl text-xs text-text-secondary hover:text-brand hover:bg-brand/5 border border-transparent hover:border-brand/20 transition-all duration-300 cursor-pointer"
-                >
-                  <Table2 className="w-3.5 h-3.5 text-text-muted group-hover:text-brand transition-colors shrink-0" />
-                  <span className="truncate font-medium">{t.name}</span>
-                  {t.estimatedRowCount > 0 && (
-                    <span className="ml-auto text-[9px] font-bold text-text-muted group-hover:text-brand/80 shrink-0 opacity-60">
-                      {t.estimatedRowCount > 1000
-                        ? `${(t.estimatedRowCount / 1000).toFixed(1)}K`
-                        : t.estimatedRowCount}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </>
-          )}
-          {views.length > 0 && (
-            <>
-              {views.map(v => (
-                <button
-                  key={v.name}
-                  onClick={() => onSelectTable(schema, v.name)}
-                  className="group flex items-center gap-3 w-full px-3 py-2 rounded-xl text-xs text-text-secondary hover:text-cyan-400 hover:bg-cyan-500/5 border border-transparent hover:border-cyan-500/20 transition-all duration-300 cursor-pointer"
-                >
-                  <Eye className="w-3.5 h-3.5 text-text-muted group-hover:text-cyan-400 transition-colors shrink-0" />
-                  <span className="truncate font-medium">{v.name}</span>
-                </button>
-              ))}
-            </>
-          )}
+        <div className="ml-5 p-1 space-y-0.5">
+          {tables.map(t => (
+            <SchemaTableItem key={t.name} schema={schema} table={t} onSelect={onSelectTable} type="table" />
+          ))}
+          {views.map(v => (
+            <SchemaTableItem key={v.name} schema={schema} table={v} onSelect={onSelectTable} type="view" />
+          ))}
         </div>
       )}
     </div>
   );
-}
+});
+
+const SchemaTableItem = memo(function SchemaTableItem({
+  schema, table, onSelect, type,
+}: {
+  schema: string;
+  table: any;
+  onSelect: (schema: string, name: string) => void;
+  type: 'table' | 'view';
+}) {
+  const handleClick = useCallback(() => {
+    onSelect(schema, table.name);
+  }, [schema, table.name, onSelect]);
+
+  if (type === 'view') {
+    return (
+      <button
+        onClick={handleClick}
+        className="group flex items-center gap-3 w-full px-3 py-2 rounded-xl text-xs text-text-secondary hover:text-cyan-400 hover:bg-cyan-500/5 border border-transparent hover:border-cyan-500/20 transition-colors duration-200 cursor-pointer"
+      >
+        <Eye className="w-3.5 h-3.5 text-text-muted group-hover:text-cyan-400 transition-colors shrink-0" />
+        <span className="truncate font-medium">{table.name}</span>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      className="group flex items-center gap-3 w-full px-3 py-2 rounded-xl text-xs text-text-secondary hover:text-brand hover:bg-brand/5 border border-transparent hover:border-brand/20 transition-colors duration-200 cursor-pointer"
+    >
+      <Table2 className="w-3.5 h-3.5 text-text-muted group-hover:text-brand transition-colors shrink-0" />
+      <span className="truncate font-medium">{table.name}</span>
+      {table.estimatedRowCount > 0 && (
+        <span className="ml-auto text-[9px] font-bold text-text-muted group-hover:text-brand/80 shrink-0 opacity-60">
+          {table.estimatedRowCount > 1000
+            ? `${(table.estimatedRowCount / 1000).toFixed(1)}K`
+            : table.estimatedRowCount}
+        </span>
+      )}
+    </button>
+  );
+});

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useMemo } from 'react';
 import { Database, ChevronRight } from 'lucide-react';
 
 interface Column {
@@ -38,8 +38,41 @@ function formatCellValue(value: unknown): { display: string; colorClass: string 
   return { display: str, colorClass: 'text-text-primary/90' };
 }
 
-export function Table({ columns, data, compact = false, maxRows, className = '', onViewAll }: TableProps) {
-  const displayData = maxRows ? data.slice(0, maxRows) : data;
+// Memoized row to prevent re-renders of all rows when any single row updates
+const TableRow = memo(function TableRow({
+  row,
+  columns,
+  compact,
+}: {
+  row: Record<string, unknown>;
+  columns: Column[];
+  compact: boolean;
+}) {
+  return (
+    <tr className="hover:bg-white/[0.04] transition-colors group">
+      {columns.map((col) => {
+        const { display, colorClass } = formatCellValue(row[col.key]);
+        return (
+          <td
+            key={col.key}
+            className={`
+              ${compact ? 'px-4 py-2.5' : 'px-6 py-4'}
+              ${colorClass}
+              text-${col.align || 'left'}
+              max-w-[400px] truncate
+            `}
+            title={display}
+          >
+            {display}
+          </td>
+        );
+      })}
+    </tr>
+  );
+});
+
+export const Table = memo(function Table({ columns, data, compact = false, maxRows, className = '', onViewAll }: TableProps) {
+  const displayData = useMemo(() => maxRows ? data.slice(0, maxRows) : data, [data, maxRows]);
   const hasMore = maxRows ? data.length > maxRows : false;
 
   if (data.length === 0) {
@@ -79,28 +112,7 @@ export function Table({ columns, data, compact = false, maxRows, className = '',
           </thead>
           <tbody className="divide-y divide-white/[0.03]">
             {displayData.map((row, i) => (
-              <tr
-                key={i}
-                className="hover:bg-white/[0.04] transition-all duration-300 group"
-              >
-                {columns.map((col) => {
-                  const { display, colorClass } = formatCellValue(row[col.key]);
-                  return (
-                    <td
-                      key={col.key}
-                      className={`
-                        ${compact ? 'px-4 py-2.5' : 'px-6 py-4'}
-                        ${colorClass}
-                        text-${col.align || 'left'}
-                        max-w-[400px] truncate transition-colors
-                      `}
-                      title={display}
-                    >
-                      {display}
-                    </td>
-                  );
-                })}
-              </tr>
+              <TableRow key={i} row={row} columns={columns} compact={compact} />
             ))}
           </tbody>
         </table>
@@ -110,7 +122,7 @@ export function Table({ columns, data, compact = false, maxRows, className = '',
         <div className="px-6 py-3 bg-white/[0.02] border-t border-white/5 text-center">
           <button
             onClick={onViewAll}
-            className="group inline-flex items-center gap-2 text-[10px] font-black tracking-widest text-brand hover:text-brand-hover transition-all cursor-pointer uppercase py-1"
+            className="group inline-flex items-center gap-2 text-[10px] font-black tracking-widest text-brand hover:text-brand-hover transition-colors cursor-pointer uppercase py-1"
           >
             Ver todas as {data.length} linhas
             <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
@@ -119,4 +131,4 @@ export function Table({ columns, data, compact = false, maxRows, className = '',
       )}
     </div>
   );
-}
+});
