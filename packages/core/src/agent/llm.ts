@@ -212,12 +212,22 @@ const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 
 const MAX_HISTORY_MESSAGES = 20;
 const DEFAULT_MODEL = 'gpt-5-codex';
+const OPENAI_CODEX_AUTH_MODELS = new Set(['gpt-5-codex', 'gpt-5']);
 
 function normalizeModelName(model: string): string {
-  if (model === 'gpt-5.3-codex') {
+  const normalized = model.trim().toLowerCase();
+  if (normalized === 'gpt-5.3-codex') {
     return DEFAULT_MODEL;
   }
-  return model;
+  return normalized;
+}
+
+function resolveOpenAICodexModel(model: string): string {
+  const normalized = normalizeModelName(model);
+  if (OPENAI_CODEX_AUTH_MODELS.has(normalized)) {
+    return normalized;
+  }
+  return DEFAULT_MODEL;
 }
 
 // ─── Responses API Helpers ───
@@ -329,16 +339,22 @@ export class LLMClient {
   }
 
   setModel(model: string): void {
+    if (this.auth.getProvider() === 'openai') {
+      this.modelOverride = resolveOpenAICodexModel(model);
+      return;
+    }
     this.modelOverride = model;
   }
 
   getModel(): string {
     const provider = this.auth.getProvider();
-    if (this.modelOverride) return this.modelOverride;
     if (provider === 'anthropic') {
+      if (this.modelOverride) return this.modelOverride;
       return process.env.ANTHROPIC_MODEL || getAuth()?.model || DEFAULT_ANTHROPIC_MODEL;
     }
-    return normalizeModelName(process.env.OPENAI_MODEL || getAuth()?.model || DEFAULT_MODEL);
+
+    const configured = this.modelOverride || process.env.OPENAI_MODEL || getAuth()?.model || DEFAULT_MODEL;
+    return resolveOpenAICodexModel(configured);
   }
 
   async chat(userMessage: string, onDelta?: (text: string) => void): Promise<LLMResponse> {
@@ -516,7 +532,11 @@ export class LLMClient {
     };
   }
 
-  private async doChatOpenAI(isRetry: boolean, onDelta?: (text: string) => void): Promise<LLMResponse> {
+  private async doChatOpenAI(
+    isRetry: boolean,
+    onDelta?: (text: string) => void,
+    forcedModel?: string
+  ): Promise<LLMResponse> {
     const accessToken = await this.auth.getAccessToken();
 
     // OpenAI-specific: get chatgpt account ID
@@ -524,9 +544,12 @@ export class LLMClient {
 
     const input = convertToResponsesInput(this.conversationHistory);
 
-    const model = this.modelOverride
-      ? normalizeModelName(this.modelOverride)
-      : normalizeModelName(process.env.OPENAI_MODEL || getAuth()?.model || DEFAULT_MODEL);
+    const configuredModel = forcedModel
+      || this.modelOverride
+      || process.env.OPENAI_MODEL
+      || getAuth()?.model
+      || DEFAULT_MODEL;
+    const model = resolveOpenAICodexModel(configuredModel);
 
     const requestBody = JSON.stringify({
       model,
@@ -556,14 +579,14 @@ export class LLMClient {
       requestBody
     );
 
-    // Error handling — read body only for errors (small payloads)
+    // Error handling - read body only for errors (small payloads)
     if (response.statusCode === 401) {
       response.stream.resume(); // drain
       if (!isRetry) {
         await this.auth.getAccessToken();
-        return this.doChatOpenAI(true, onDelta);
+        return this.doChatOpenAI(true, onDelta, forcedModel);
       }
-      throw new Error('Token inválido ou expirado. Faça login novamente.');
+      throw new Error('Token invalido ou expirado. Faca login novamente.');
     }
 
     if (response.statusCode === 429) {
@@ -573,12 +596,21 @@ export class LLMClient {
 
     if (response.statusCode && response.statusCode >= 500) {
       response.stream.resume();
-      throw new Error('Serviço indisponível. Tente novamente em alguns instantes.');
+      throw new Error('Servico indisponivel. Tente novamente em alguns instantes.');
     }
 
     if (response.statusCode !== 200) {
       const errorBody = await readBody(response.stream);
       let errorMsg = `Erro na API ChatGPT (HTTP ${response.statusCode})`;
+
+      const unsupportedCodexModel =
+        response.statusCode === 400 &&
+        /not supported when using Codex/i.test(errorBody);
+
+      if (unsupportedCodexModel && model !== DEFAULT_MODEL && forcedModel !== DEFAULT_MODEL) {
+        return this.doChatOpenAI(isRetry, onDelta, DEFAULT_MODEL);
+      }
+
       try {
         const errorData = JSON.parse(errorBody) as {
           error?: { message?: string };
@@ -597,7 +629,7 @@ export class LLMClient {
       throw new Error(errorMsg);
     }
 
-    // Stream SSE — parse incrementally, only accumulate text
+    // Stream SSE - parse incrementally, only accumulate text
     const { content, usage } = await parseSSEStream(response.stream, onDelta);
 
     if (!content) {
@@ -614,7 +646,6 @@ export class LLMClient {
 
     return { content, tokensUsed };
   }
-
   private trimHistory(): void {
     if (this.conversationHistory.length > MAX_HISTORY_MESSAGES) {
       const excess = this.conversationHistory.length - MAX_HISTORY_MESSAGES;
@@ -622,3 +653,4 @@ export class LLMClient {
     }
   }
 }
+

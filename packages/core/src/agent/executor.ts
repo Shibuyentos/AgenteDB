@@ -23,6 +23,15 @@ const DESTRUCTIVE_KEYWORDS = [
   'CREATE',
 ];
 
+const INCOMPLETE_SQL_PATTERNS: RegExp[] = [
+  /\.{3,}/,       // "...", "...."
+  /<[a-z_][a-z0-9_ -]*>/i, // "<coluna>"
+  /\[[a-z_][a-z0-9_ ]*\]/i, // "[tabela]"
+  /\bTODO\b/i,
+  /\bTBD\b/i,
+  /\(\s*\.\.\.\s*\)/, // "(...)"
+];
+
 export class QueryExecutor {
   private db: DatabaseConnector;
   private readOnlyMode: boolean = true;
@@ -78,6 +87,17 @@ export class QueryExecutor {
   }
 
   async execute(sql: string): Promise<ExecutionResult> {
+    const invalidReason = this.getInvalidSQLReason(sql);
+    if (invalidReason) {
+      return {
+        sql,
+        rows: [],
+        rowCount: 0,
+        duration: 0,
+        error: invalidReason,
+      };
+    }
+
     if (this.isDestructiveQuery(sql) && this.readOnlyMode) {
       return {
         sql,
@@ -163,5 +183,28 @@ export class QueryExecutor {
       'BEGIN',
     ];
     return sqlStarters.some((kw) => upper.startsWith(kw));
+  }
+
+  private getInvalidSQLReason(sql: string): string | null {
+    const cleaned = sql
+      .replace(/--.*$/gm, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .trim();
+
+    if (!cleaned) {
+      return 'SQL vazio. Gere uma query completa antes de executar.';
+    }
+
+    const withoutStrings = cleaned
+      .replace(/'(?:''|[^'])*'/g, "''")
+      .replace(/"(?:[^"]|"")*"/g, '""');
+
+    for (const pattern of INCOMPLETE_SQL_PATTERNS) {
+      if (pattern.test(withoutStrings)) {
+        return 'SQL incompleto detectado (placeholder como "...", "(...)" ou "<coluna>"). Gere SQL completo antes de executar.';
+      }
+    }
+
+    return null;
   }
 }

@@ -3,7 +3,9 @@ import { Database, Lock, LockOpen, User, LogOut, GitFork, ChevronDown } from 'lu
 import { useAppStore } from '../../stores/app-store';
 import { api } from '../../lib/api';
 
-const MODEL_OPTIONS: Record<string, { label: string; value: string }[]> = {
+type ProviderId = 'openai' | 'anthropic';
+
+const MODEL_OPTIONS_FALLBACK: Record<ProviderId, { label: string; value: string }[]> = {
   anthropic: [
     { label: 'Sonnet 4.6', value: 'claude-sonnet-4-6' },
     { label: 'Opus 4.6', value: 'claude-opus-4-6' },
@@ -11,16 +13,20 @@ const MODEL_OPTIONS: Record<string, { label: string; value: string }[]> = {
   ],
   openai: [
     { label: 'GPT-5 Codex', value: 'gpt-5-codex' },
+    { label: 'GPT-5', value: 'gpt-5' },
   ],
 };
 
-function getModelLabel(model: string | null): string {
-  if (!model) return 'Modelo';
-  for (const opts of Object.values(MODEL_OPTIONS)) {
-    const found = opts.find((o) => o.value === model);
-    if (found) return found.label;
-  }
-  return model;
+const MODEL_LABELS: Record<string, string> = Object.values(MODEL_OPTIONS_FALLBACK).flat()
+  .reduce<Record<string, string>>((acc, item) => {
+    acc[item.value] = item.label;
+    return acc;
+  }, {});
+
+function prettifyModelLabel(model: string): string {
+  const known = MODEL_LABELS[model];
+  if (known) return known;
+  return model.replace(/[-_]+/g, ' ').toUpperCase();
 }
 
 interface HeaderProps {
@@ -43,14 +49,38 @@ export function Header({ onOpenGraph, onLogin }: HeaderProps) {
   } = useAppStore();
 
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const [availableModels, setAvailableModels] = useState<{ label: string; value: string }[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (isAuthenticated && provider) {
-      api.auth.getModel().then((res) => {
-        if (res.current) setModel(res.current);
-      }).catch(() => {});
+    if (!isAuthenticated || !provider) {
+      setAvailableModels([]);
+      return;
     }
+
+    api.auth.getModel()
+      .then((res) => {
+        if (res.current) {
+          setModel(res.current);
+        }
+
+        const fromApi = (res.available || []).map((value) => ({
+          label: prettifyModelLabel(value),
+          value,
+        }));
+
+        if (fromApi.length > 0) {
+          setAvailableModels(fromApi);
+          return;
+        }
+
+        const fallback = MODEL_OPTIONS_FALLBACK[provider as ProviderId] || [];
+        setAvailableModels(fallback);
+      })
+      .catch(() => {
+        const fallback = MODEL_OPTIONS_FALLBACK[provider as ProviderId] || [];
+        setAvailableModels(fallback);
+      });
   }, [isAuthenticated, provider, setModel]);
 
   useEffect(() => {
@@ -83,7 +113,7 @@ export function Header({ onOpenGraph, onLogin }: HeaderProps) {
     }
   };
 
-  const availableModels = provider ? MODEL_OPTIONS[provider] || [] : [];
+  const currentModelLabel = model ? prettifyModelLabel(model) : 'Modelo';
 
   return (
     <header className="h-14 bg-[#000000] border-b border-white/10 flex items-center px-4 md:px-6 shrink-0 relative z-20">
@@ -130,7 +160,7 @@ export function Header({ onOpenGraph, onLogin }: HeaderProps) {
               onClick={() => setModelDropdownOpen((v) => !v)}
               className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-bold tracking-wider uppercase transition-all duration-300 cursor-pointer border bg-[#09090b] text-white border-white/10 hover:bg-[#18181b] hover:border-white/30"
             >
-              {getModelLabel(model)}
+              {currentModelLabel}
               <ChevronDown className={`w-3 h-3 transition-transform duration-300 ${modelDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
 
