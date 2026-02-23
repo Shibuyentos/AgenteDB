@@ -130,7 +130,7 @@ app.use(errorHandler);
 setupChatSocket(server, state);
 
 // Start
-server.listen(PORT, () => {
+server.listen(PORT, '127.0.0.1', () => {
   console.log(`
 ╔══════════════════════════════════════╗
 ║       🗄️  Shibuy.ai Server            ║

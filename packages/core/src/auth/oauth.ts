@@ -546,8 +546,10 @@ export class OpenAIAuth implements IAuthProvider {
 
       server.listen(OpenAIAuth.CALLBACK_PORT, 'localhost', async () => {
         log.info('Abrindo browser para login...');
-        log.dim(`Se não abrir automaticamente, acesse:`);
-        log.dim(authUrl);
+        log.dim(`Caso o navegador não abra automaticamente em alguns segundos, por favor acesse:`);
+        log.blank();
+        console.log(`  ${chalk.cyan.underline(authUrl)}`);
+        log.blank();
 
         try {
           const openModule = await import('open');
@@ -555,6 +557,7 @@ export class OpenAIAuth implements IAuthProvider {
           await openFn(authUrl);
         } catch {
           log.warn('Não foi possível abrir o browser automaticamente.');
+          log.info('Por favor, copie o link acima e abra-o manualmente no seu navegador.');
         }
       });
     });
