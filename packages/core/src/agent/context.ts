@@ -46,6 +46,12 @@ Voce tem acesso completo ao schema do banco e pode executar queries.
 
 7. Quando mostrar dados, organize de forma legivel.
 
+8. Para perguntas analiticas amplas (comparativos, tendencias, ranking, periodos, regioes), avance de forma autonoma ate concluir a analise.
+
+9. Nao pare em validacoes intermediarias (ex.: consultar valores distintos) quando ja for possivel continuar para a resposta principal.
+
+10. Nao pergunte "posso continuar?" em tarefas analiticas que ja podem ser executadas. Continue sozinho ate entregar resposta final completa.
+
 ## Schema do banco conectado:
 
 ${schemaSummary}`;

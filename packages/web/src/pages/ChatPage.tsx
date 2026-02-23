@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
-import { Send, MessageSquare, Trash2, Command, Sparkles } from 'lucide-react';
+import { Send, Square, MessageSquare, Trash2, Command, Sparkles } from 'lucide-react';
 import { ChatMessage } from '../components/chat/ChatMessage';
 import { MentionDropdown } from '../components/chat/MentionDropdown';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -8,7 +8,15 @@ import { useAppStore } from '../stores/app-store';
 
 export function ChatPage() {
   const connectionStatus = useAppStore((s) => s.connectionStatus);
-  const { messages, sendMessage, clearMessages } = useWebSocket();
+  const {
+    messages,
+    sendMessage,
+    cancelRun,
+    clearMessages,
+    isBusy,
+    runPhase,
+    runDetail,
+  } = useWebSocket();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -26,22 +34,36 @@ export function ChatPage() {
     }
   }, [input]);
 
+  const notConnected = connectionStatus !== 'connected';
+  const inputLocked = notConnected || isBusy;
+  const statusText =
+    runDetail ||
+    (runPhase === 'thinking'
+      ? 'Pensando...'
+      : runPhase === 'executing'
+        ? 'Executando consulta...'
+        : runPhase === 'summarizing'
+          ? 'Consolidando resposta...'
+          : '');
+
   const handleSend = () => {
     const trimmed = input.trim();
-    if (!trimmed) return;
-    sendMessage(trimmed);
-    setInput('');
+    if (!trimmed || isBusy || notConnected) return;
+    const sent = sendMessage(trimmed);
+    if (sent) {
+      setInput('');
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (mention.handleKeyDown(e)) return;
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
-      handleSend();
+      if (!isBusy) {
+        handleSend();
+      }
     }
   };
-
-  const notConnected = connectionStatus !== 'connected';
 
   return (
     <div className="flex flex-col h-full bg-transparent relative">
@@ -81,7 +103,7 @@ export function ChatPage() {
                     setInput(item.text);
                     textareaRef.current?.focus();
                   }}
-                  disabled={notConnected}
+                  disabled={notConnected || isBusy}
                   className="group flex items-center gap-3 text-left px-4 py-3 rounded-xl text-[13px] font-medium bg-[#09090b] border border-white/10 hover:bg-[#18181b] hover:border-white/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
                   <div className="w-7 h-7 rounded-lg bg-black border border-white/10 flex items-center justify-center text-text-muted group-hover:text-white transition-colors">
@@ -106,7 +128,11 @@ export function ChatPage() {
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-3xl px-6 z-20">
         <div className="bg-[#09090b] border border-white/10 rounded-2xl shadow-2xl flex items-end gap-2 p-2 shadow-subtle-inner focus-within:border-white/30 transition-colors duration-300">
           {messages.length > 0 && (
-            <button onClick={clearMessages} className="w-10 h-10 flex items-center justify-center rounded-xl text-text-muted hover:text-white hover:bg-white/5 transition-colors shrink-0">
+            <button
+              onClick={clearMessages}
+              disabled={isBusy}
+              className="w-10 h-10 flex items-center justify-center rounded-xl text-text-muted hover:text-white hover:bg-white/5 transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
               <Trash2 className="w-4 h-4" />
             </button>
           )}
@@ -128,23 +154,42 @@ export function ChatPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={notConnected ? 'Conecte a um banco primeiro...' : 'Faca uma pergunta ao banco de dados...'}
-              disabled={notConnected}
+              placeholder={
+                notConnected
+                  ? 'Conecte a um banco primeiro...'
+                  : isBusy
+                    ? 'Aguarde a resposta atual...'
+                    : 'Faca uma pergunta ao banco de dados...'
+              }
+              disabled={inputLocked}
+              data-chat-input
               rows={1}
               className="w-full bg-transparent border-none px-4 py-3 text-[14px] text-white placeholder:text-text-muted focus:outline-none resize-none disabled:opacity-50"
             />
           </div>
 
           <button
-            onClick={handleSend}
-            disabled={notConnected || !input.trim()}
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-black hover:bg-gray-200 transition-colors disabled:opacity-20 disabled:bg-white/10 disabled:text-white"
+            onClick={isBusy ? cancelRun : handleSend}
+            disabled={isBusy ? false : notConnected || !input.trim()}
+            className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${
+              isBusy
+                ? 'bg-white/10 text-white hover:bg-white/20'
+                : 'bg-white text-black hover:bg-gray-200 disabled:opacity-20 disabled:bg-white/10 disabled:text-white'
+            }`}
+            title={isBusy ? 'Parar execucao' : 'Enviar'}
           >
-            <Send className="w-4 h-4" />
+            {isBusy ? <Square className="w-4 h-4 fill-current" /> : <Send className="w-4 h-4" />}
           </button>
         </div>
+        <div className="text-center mt-2 min-h-[16px]">
+          {isBusy && (
+            <span className="text-[11px] text-text-secondary tracking-wide">{statusText}</span>
+          )}
+        </div>
         <div className="text-center mt-3">
-          <span className="text-[10px] text-text-muted tracking-wide">Pressione <kbd className="font-mono bg-white/10 px-1 py-0.5 rounded border border-white/10">CTRL+ENTER</kbd> para enviar</span>
+          <span className="text-[10px] text-text-muted tracking-wide">
+            Pressione <kbd className="font-mono bg-white/10 px-1 py-0.5 rounded border border-white/10">CTRL+ENTER</kbd> para enviar
+          </span>
         </div>
       </div>
     </div>

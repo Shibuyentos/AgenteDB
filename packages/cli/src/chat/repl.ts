@@ -2,6 +2,7 @@ import * as readline from 'readline';
 import chalk from 'chalk';
 import ora from 'ora';
 import {
+  analyzeSqlExecutionError,
   DatabaseConnector,
   SchemaEngine,
   LLMClient,
@@ -160,6 +161,41 @@ export class ChatREPL {
         if (result.error) {
           log.error(`Erro SQL: ${result.error}`);
 
+          const guidance = analyzeSqlExecutionError(result.error);
+          let shouldRetry = guidance.shouldAutoRetry;
+          const recoveryInstruction =
+            guidance.recoveryInstruction ||
+            'Corrija a query mantendo o objetivo original do usuario.';
+
+          if (guidance.shouldAskUser && guidance.userQuestion) {
+            const followUp = `${guidance.userQuestion}\nPosso tentar automaticamente uma alternativa agora.`;
+            log.agent(followUp);
+            this.llmClient.addToHistory({
+              role: 'assistant',
+              content: followUp,
+            });
+
+            shouldRetry = await this.askConfirmation(
+              'Tentar alternativa automatica agora? (s/n): '
+            );
+
+            if (!shouldRetry) {
+              log.dim('Sem problemas. Nao vou tentar automaticamente.');
+              return;
+            }
+          }
+
+          if (!shouldRetry) {
+            return;
+          }
+
+          const retryPrompt = this.buildGuidedRetryPrompt({
+            userInput: input,
+            failedSQL: sql,
+            errorMessage: result.error,
+            instruction: recoveryInstruction,
+          });
+
           const retrySpinner = ora({
             text: chalk.dim('Analisando erro e tentando corrigir...'),
             spinner: 'dots',
@@ -167,9 +203,7 @@ export class ChatREPL {
           }).start();
 
           try {
-            const fixResponse = await this.llmClient.chat(
-              `A query retornou um erro:\n${result.error}\n\nPor favor, corrija a query.`
-            );
+            const fixResponse = await this.llmClient.chat(retryPrompt);
             retrySpinner.stop();
 
             this.totalTokens += fixResponse.tokensUsed.total;
@@ -524,6 +558,10 @@ export class ChatREPL {
 
     if (result.error) {
       log.error(`Erro SQL: ${result.error}`);
+      const guidance = analyzeSqlExecutionError(result.error);
+      if (guidance.shouldAskUser && guidance.userQuestion) {
+        log.agent(guidance.userQuestion);
+      }
     } else {
       this.showQueryResult(result);
     }
@@ -642,6 +680,28 @@ export class ChatREPL {
     log.success('Até logo! 👋');
     this.isRunning = false;
     this.rl?.close();
+  }
+
+  private buildGuidedRetryPrompt(args: {
+    userInput: string;
+    failedSQL: string;
+    errorMessage: string;
+    instruction: string;
+  }): string {
+    return [
+      'A consulta SQL abaixo falhou e precisa ser ajustada.',
+      `Pergunta original do usuario: ${JSON.stringify(args.userInput)}`,
+      '',
+      'SQL que falhou:',
+      '```sql',
+      args.failedSQL,
+      '```',
+      '',
+      `Erro retornado: ${args.errorMessage}`,
+      '',
+      `Instrucao obrigatoria: ${args.instruction}`,
+      'Responda com exatamente um bloco ```sql``` completo, executavel e sem placeholders.',
+    ].join('\n');
   }
 
   private askConfirmation(question: string): Promise<boolean> {

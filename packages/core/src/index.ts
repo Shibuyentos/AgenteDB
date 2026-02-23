@@ -26,6 +26,11 @@ export type { LLMMessage, LLMResponse } from './agent/llm.js';
 
 export { QueryExecutor } from './agent/executor.js';
 export type { ExecutionResult } from './agent/executor.js';
+export {
+  analyzeSqlExecutionError,
+  type SqlErrorGuidance,
+  type SqlErrorKind,
+} from './agent/error-guidance.js';
 
 // Utils
 export {
