@@ -9,3 +9,4 @@ credentials.json
 .agentdb/
 dev.stdout.log
 dev.stderr.log
+package-lock.json
