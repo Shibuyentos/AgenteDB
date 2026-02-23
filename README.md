@@ -16,7 +16,59 @@ Converse com seu banco de dados. Conecte qualquer PostgreSQL, pergunte em portug
 
 ## Quick Start
 
-### Com Docker (recomendado)
+### Sem Docker (localhost)
+
+1. Instale as dependencias na raiz do projeto:
+
+```bash
+npm install
+```
+
+2. Faca o build inicial do pacote `core`:
+
+```bash
+npm run build -w @agentdb/core
+```
+
+3. Inicie o projeto em modo desenvolvimento:
+
+```bash
+npm run dev
+```
+
+Esse comando sobe:
+
+- API/WS em http://localhost:3001
+- Web em http://localhost:5173
+
+4. Abra http://localhost:5173, autentique e adicione sua conexao PostgreSQL pela interface.
+
+### Se `npm run dev` falhar no Windows
+
+Rode em dois terminais separados.
+
+Terminal 1:
+
+```bash
+npm run dev:server
+```
+
+Terminal 2:
+
+```bash
+npm run dev:web
+```
+
+### Build + run local (producao, sem Docker)
+
+```bash
+npm run build
+npm run start
+```
+
+Acesse http://localhost:3001
+
+### Com Docker (opcional)
 
 ```bash
 docker compose up -d
@@ -24,18 +76,10 @@ docker compose up -d
 
 Acesse http://localhost:3001
 
-### Manual
-
-```bash
-npm install
-npm run dev
-```
-
-Acesse http://localhost:5173
-
 ### CLI
 
 ```bash
+npm run build -w @agentdb/core
 npm run cli
 ```
 
