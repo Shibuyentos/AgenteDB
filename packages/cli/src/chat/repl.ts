@@ -47,7 +47,7 @@ export class ChatREPL {
 
       log.blank();
       log.agent(
-        `AgentDB conectado a: ${chalk.bold(schema.database)} (${chalk.dim(schema.version)})`
+        `Shibuy.ai conectado a: ${chalk.bold(schema.database)} (${chalk.dim(schema.version)})`
       );
       log.dim(
         `${tableCount} tabelas${viewCount > 0 ? ` e ${viewCount} views` : ''} mapeadas em ${schemaCount} schema${schemaCount > 1 ? 's' : ''}`
@@ -325,7 +325,7 @@ export class ChatREPL {
     console.log(`  ${chalk.bold('/reconnect')}               Reconecta e remapeia schema`);
     console.log(`  ${chalk.bold('/export')} ${chalk.dim('<json|csv>')}        Exporta último resultado`);
     console.log(`  ${chalk.bold('/stats')}                   Mostra estatísticas da sessão`);
-    console.log(`  ${chalk.bold('/quit')}                    Sai do AgentDB`);
+    console.log(`  ${chalk.bold('/quit')}                    Sai do Shibuy.ai`);
     log.blank();
   }
 

@@ -106,9 +106,9 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         <div className="w-14 h-14 rounded-2xl bg-brand/10 flex items-center justify-center mb-4">
           <Database className="w-7 h-7 text-brand" />
         </div>
-        <h2 className="text-lg font-bold text-text-primary mb-1">AgentDB</h2>
+        <h2 className="text-lg font-bold text-text-primary mb-1">Shibuy.ai</h2>
         <p className="text-sm text-text-secondary text-center mb-4 max-w-sm">
-          Escolha seu provedor de IA para usar com o AgentDB.
+          Escolha seu provedor de IA para usar com o Shibuy.ai.
         </p>
 
         {/* Provider Tabs */}

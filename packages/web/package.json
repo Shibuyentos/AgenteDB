@@ -1,7 +1,7 @@
 {
   "name": "@agentdb/web",
   "version": "0.1.0",
-  "description": "AgentDB web interface",
+  "description": "Shibuy.ai web interface",
   "private": true,
   "type": "module",
   "scripts": {

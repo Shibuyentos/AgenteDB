@@ -53,7 +53,7 @@ export function ChatPage() {
             </div>
 
             <h1 className="text-3xl font-semibold tracking-tight text-white mb-4">
-              AgentDB
+              Shibuy.ai
             </h1>
 
             <p className="text-sm text-text-secondary max-w-md mb-12 leading-relaxed">

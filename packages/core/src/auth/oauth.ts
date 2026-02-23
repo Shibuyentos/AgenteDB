@@ -248,7 +248,7 @@ export class OpenAIAuth implements IAuthProvider {
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
           res.end(`
             <!DOCTYPE html><html><body style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:system-ui;background:#09090B;color:#fff;">
-            <div style="text-align:center;"><h1 style="font-size:3em;">✅</h1><h2>Conectado!</h2><p style="color:#A1A1AA;">Volte para o AgentDB.</p>
+            <div style="text-align:center;"><h1 style="font-size:3em;">✅</h1><h2>Conectado!</h2><p style="color:#A1A1AA;">Volte para o Shibuy.ai.</p>
             <script>setTimeout(() => window.close(), 2000);</script>
             </div></body></html>
           `);
@@ -503,7 +503,7 @@ export class OpenAIAuth implements IAuthProvider {
               <div style="text-align:center;">
                 <h1 style="font-size:3em;">✅</h1>
                 <h2>Autenticação concluída!</h2>
-                <p style="color:#aaa;">Pode fechar esta aba e voltar ao AgentDB.</p>
+                <p style="color:#aaa;">Pode fechar esta aba e voltar ao Shibuy.ai.</p>
               </div>
             </body>
             </html>

@@ -131,7 +131,7 @@ export function OnboardingPage() {
           <div className="w-16 h-16 rounded-2xl bg-brand/10 flex items-center justify-center mb-3">
             <Database className="w-8 h-8 text-brand" />
           </div>
-          <h1 className="text-2xl font-bold">AgentDB</h1>
+          <h1 className="text-2xl font-bold">Shibuy.ai</h1>
           <p className="text-sm text-text-muted mt-1">Seu banco de dados, sua conversa.</p>
         </div>
 

@@ -57,7 +57,7 @@ async function main(): Promise<void> {
     console.log(BANNER);
     const config = loadConfig();
     log.blank();
-    console.log(chalk.bold.cyan('  ⚙  Configuração do AgentDB'));
+    console.log(chalk.bold.cyan('  ⚙  Configuração do Shibuy.ai'));
     log.blank();
     console.log(chalk.bold('  Conexões:'));
     if (config.connections.length === 0) {

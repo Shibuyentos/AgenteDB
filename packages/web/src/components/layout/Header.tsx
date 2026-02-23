@@ -121,7 +121,7 @@ export function Header({ onOpenGraph, onLogin }: HeaderProps) {
         <div className="w-8 h-8 rounded-xl bg-[#09090b] border border-white/10 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
           <Database className="w-4 h-4 text-white" />
         </div>
-        <span className="font-semibold text-lg tracking-tight text-white">AgentDB</span>
+        <span className="font-semibold text-lg tracking-tight text-white">Shibuy.ai</span>
       </div>
 
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-full max-w-[430px] px-4 pointer-events-none hidden md:block">

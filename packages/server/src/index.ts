@@ -133,7 +133,7 @@ setupChatSocket(server, state);
 server.listen(PORT, () => {
   console.log(`
 ╔══════════════════════════════════════╗
-║       🗄️  AgentDB Server            ║
+║       🗄️  Shibuy.ai Server            ║
 ║                                      ║
 ║  API:  http://localhost:${PORT}          ║
 ║  WS:   ws://localhost:${PORT}/ws/chat    ║

@@ -1,7 +1,7 @@
 {
   "name": "@agentdb/server",
   "version": "0.1.0",
-  "description": "AgentDB API server",
+  "description": "Shibuy.ai API server",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

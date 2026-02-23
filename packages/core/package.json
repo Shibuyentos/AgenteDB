@@ -1,7 +1,7 @@
 {
   "name": "@agentdb/core",
   "version": "0.1.0",
-  "description": "AgentDB core logic - database agent powered by AI",
+  "description": "Shibuy.ai core logic - database agent powered by AI",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

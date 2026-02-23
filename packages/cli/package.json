@@ -1,7 +1,7 @@
 {
   "name": "@agentdb/cli",
   "version": "0.1.0",
-  "description": "AgentDB CLI interface",
+  "description": "Shibuy.ai CLI interface",
   "type": "module",
   "main": "dist/index.js",
   "bin": {

@@ -12,7 +12,7 @@ export class ContextBuilder {
   buildSystemPrompt(): string {
     const schemaSummary = this.schemaEngine.generateContextSummary();
 
-    return `Voce e o AgentDB, um agente especialista em banco de dados PostgreSQL.
+    return `Voce e o Shibuy.ai, um agente especialista em banco de dados PostgreSQL.
 Voce tem acesso completo ao schema do banco e pode executar queries.
 
 ## Suas capacidades:

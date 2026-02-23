@@ -1,4 +1,4 @@
-# AgentDB
+# Shibuy.ai
 
 Converse com seu banco de dados. Conecte qualquer PostgreSQL, pergunte em portugues, receba respostas inteligentes.
 
@@ -42,7 +42,7 @@ npm run cli
 ## Autenticacao
 
 Na primeira execucao, faca login com sua conta OpenAI.
-O AgentDB usa OAuth PKCE (mesmo fluxo do Codex CLI) para
+O Shibuy.ai usa OAuth PKCE (mesmo fluxo do Codex CLI) para
 autenticar com sua assinatura existente do ChatGPT.
 
 Alternativa: use uma API key da OpenAI.
@@ -70,12 +70,12 @@ Alternativa: use uma API key da OpenAI.
 | `/sql <query>` | Executa SQL direto (sem LLM) |
 | `/write` | Toggle modo escrita |
 | `/clear` | Limpa historico de conversa |
-| `/quit` | Sai do AgentDB |
+| `/quit` | Sai do Shibuy.ai |
 
 ## Arquitetura
 
 ```
-agentdb/
+shibuy.ai/
   packages/
     core/       - Logica de negocio (auth, db, agent, utils)
     server/     - API Express + WebSocket
@@ -86,9 +86,9 @@ agentdb/
 ## Como funciona
 
 1. Voce pergunta em linguagem natural
-2. O AgentDB envia o schema do banco + sua pergunta pro GPT-5 Codex
+2. O Shibuy.ai envia o schema do banco + sua pergunta pro GPT-5 Codex
 3. O GPT-5 Codex gera SQL otimizado
-4. O AgentDB executa a query no seu banco (read-only por padrao)
+4. O Shibuy.ai executa a query no seu banco (read-only por padrao)
 5. Os resultados sao resumidos e exibidos
 
 ## Requisitos
