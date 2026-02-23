@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,41 +6,44 @@
 
 @layer base {
   :root {
-    --color-brand: #10B981;
-    --color-brand-hover: #059669;
-    --color-accent: #06B6D4;
-    --color-bg-base: #09090B;
-    --color-bg-card: #18181B;
-    --color-bg-elevated: #27272A;
-    --color-border: #3F3F46;
-    --color-text-primary: #FAFAFA;
-    --color-text-secondary: #A1A1AA;
-    --color-text-muted: #71717A;
-    --color-error: #EF4444;
-    --color-warning: #F59E0B;
-    --color-success: #10B981;
+    /* O "Brand" agora e Branco Puro. O design e monocromatico. */
+    --color-brand: #ffffff;
+    --color-brand-hover: #e4e4e7;
+    
+    /* Fundo Preto Absoluto */
+    --color-bg-base: #000000;
+    /* Cartoes sao um cinza extremamente escuro */
+    --color-bg-card: #09090b;
+    --color-bg-elevated: #18181b;
+
+    /* Bordas super finas e sutis (5% a 10% de opacidade) */
+    --color-border: rgba(255, 255, 255, 0.08);
+    --color-border-hover: rgba(255, 255, 255, 0.15);
+
+    /* Textos */
+    --color-text-primary: #ffffff;
+    --color-text-secondary: #a1a1aa; /* Zinc 400 */
+    --color-text-muted: #52525b; /* Zinc 600 */
   }
 
-  body {
-    @apply bg-bg-base text-text-primary antialiased;
+  html, body {
+    background-color: var(--color-bg-base);
+    color: var(--color-text-primary);
     font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Sem gradientes radiais, apenas preto solido */
   }
 
-  code, pre, .font-mono {
-    font-family: 'JetBrains Mono', monospace;
+  /* Selecao elegante */
+  ::selection {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
   }
 }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
+/* Scrollbar invisivel / minimalista */
+::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
-
-/* Selection */
-::selection { background: rgba(16, 185, 129, 0.3); }
-
-/* Smooth transitions */
-* {
-  scrollbar-color: var(--color-border) transparent;
-}
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }

@@ -1,5 +1,5 @@
 import { Table } from '../ui/Table';
-import { Clock, Rows3, Download } from 'lucide-react';
+import { Clock, Rows3, Download, FileJson, FileSpreadsheet } from 'lucide-react';
 import type { QueryResult } from '../../types';
 
 interface ResultTableProps {
@@ -45,30 +45,44 @@ export function ResultTable({ data, compact = true }: ResultTableProps) {
   };
 
   return (
-    <div className="my-2 animate-slideUp">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-bg-elevated/30 rounded-t-lg border border-border/50 border-b-0">
-        <div className="flex items-center gap-3 text-xs text-text-muted">
-          <span className="flex items-center gap-1">
-            <Rows3 className="w-3 h-3" />
-            {data.rowCount} {data.rowCount === 1 ? 'linha' : 'linhas'}
-          </span>
-          <span className="flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            {data.duration}ms
-          </span>
+    <div className="my-6 animate-fadeInUp">
+      {/* Metrics & Actions Pill */}
+      <div className="flex items-center justify-between px-6 py-3 glass-panel rounded-full border-white/5 mb-4 shadow-glow-sm">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2.5">
+            <div className="w-5 h-5 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+              <Rows3 className="w-3 h-3 text-indigo-400" />
+            </div>
+            <span className="text-[10px] font-black tracking-widest text-text-primary uppercase">
+              {data.rowCount} <span className="text-text-muted">REGISTROS</span>
+            </span>
+          </div>
+          
+          <div className="w-px h-3 bg-white/10" />
+
+          <div className="flex items-center gap-2.5">
+            <div className="w-5 h-5 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+              <Clock className="w-3 h-3 text-emerald-400" />
+            </div>
+            <span className="text-[10px] font-black tracking-widest text-text-primary uppercase">
+              {data.duration} <span className="text-text-muted">MS</span>
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
+
+        <div className="flex items-center gap-2">
           <button
             onClick={handleExportJSON}
-            className="px-2 py-0.5 rounded text-[10px] text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors cursor-pointer"
+            className="flex items-center gap-2 px-4 py-1.5 rounded-xl text-[9px] font-black tracking-widest text-text-muted hover:text-brand hover:bg-brand/10 transition-all cursor-pointer border border-transparent hover:border-brand/20 uppercase"
           >
+            <FileJson className="w-3 h-3" />
             JSON
           </button>
           <button
             onClick={handleExportCSV}
-            className="px-2 py-0.5 rounded text-[10px] text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors cursor-pointer"
+            className="flex items-center gap-2 px-4 py-1.5 rounded-xl text-[9px] font-black tracking-widest text-text-muted hover:text-brand hover:bg-brand/10 transition-all cursor-pointer border border-transparent hover:border-brand/20 uppercase"
           >
+            <FileSpreadsheet className="w-3 h-3" />
             CSV
           </button>
         </div>

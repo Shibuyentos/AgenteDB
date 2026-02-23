@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
 
 interface ModalProps {
@@ -7,73 +7,74 @@ interface ModalProps {
   title?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg';
-  maxWidth?: string;
+  size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
-const sizes = {
-  sm: 'max-w-sm',
-  md: 'max-w-lg',
-  lg: 'max-w-2xl',
-};
-
-export function Modal({ isOpen, onClose, title, children, footer, size = 'md', maxWidth }: ModalProps) {
-  const modalWidth = maxWidth || sizes[size];
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    },
-    [onClose]
-  );
-
+export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }: ModalProps) {
   useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
     if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
+      document.addEventListener('keydown', handleEsc);
       document.body.style.overflow = 'hidden';
     }
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
+      document.removeEventListener('keydown', handleEsc);
+      document.body.style.overflow = 'unset';
     };
-  }, [isOpen, handleKeyDown]);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
+  const sizes = {
+    sm: 'max-w-md',
+    md: 'max-w-xl',
+    lg: 'max-w-3xl',
+    xl: 'max-w-5xl',
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center animate-fadeIn">
-      {/* Overlay */}
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fadeIn" 
+        onClick={onClose} 
       />
+      
+      {/* Modal Card */}
+      <div className={`
+        relative w-full ${sizes[size]} glass-card-strong shadow-glass-lg
+        border-white/10 animate-scaleIn overflow-hidden flex flex-col
+      `}>
+        {/* Glow behind title */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-24 bg-brand/10 blur-[60px] pointer-events-none" />
 
-      {/* Modal */}
-      <div
-        className={`
-          relative ${modalWidth} w-full mx-4
-          bg-bg-card border border-border rounded-xl shadow-2xl
-          animate-slideUp
-        `}
-      >
         {/* Header */}
-        {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-            <h2 className="text-lg font-semibold text-text-primary">{title}</h2>
-            <button
-              onClick={onClose}
-              className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        )}
+        <div className="flex items-center justify-between px-8 py-6 border-b border-white/5 relative z-10">
+          {title ? (
+            <h3 className="text-xl font-extrabold tracking-tight text-white">
+              {title}
+            </h3>
+          ) : (
+            <span />
+          )}
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl text-text-muted hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
-        {/* Body */}
-        <div className="px-6 py-4">{children}</div>
+        {/* Content */}
+        <div className="px-8 py-8 flex-1 overflow-y-auto relative z-10 custom-scrollbar max-h-[70vh]">
+          {children}
+        </div>
 
         {/* Footer */}
         {footer && (
-          <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border">
+          <div className="px-8 py-6 border-t border-white/5 bg-white/[0.02] flex items-center justify-end gap-3 relative z-10">
             {footer}
           </div>
         )}

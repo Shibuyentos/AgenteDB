@@ -27,11 +27,11 @@ function App() {
   });
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-[var(--color-bg-base)] text-[var(--color-text-primary)]">
+    <div className="flex flex-col h-screen overflow-hidden bg-bg-base text-text-primary bg-glow noise relative">
       <Header onOpenGraph={() => setShowGraph(true)} onLogin={() => setShowAuthModal(true)} />
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative z-10">
         <Sidebar />
-        <main className="flex-1 overflow-hidden">
+        <main className="flex-1 overflow-hidden relative">
           {activePage === 'chat' && <ChatPage />}
           {activePage === 'table-detail' && <TableDetailPage />}
           {activePage === 'query-editor' && <QueryEditorPage />}

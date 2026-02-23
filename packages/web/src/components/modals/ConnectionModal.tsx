@@ -107,7 +107,7 @@ export function ConnectionModal({ isOpen, onClose, onConnect }: ConnectionModalP
       isOpen={isOpen}
       onClose={onClose}
       title="Nova Conexão"
-      maxWidth="max-w-xl"
+      size="md"
     >
       <div className="space-y-6">
         

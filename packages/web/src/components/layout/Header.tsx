@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Database, Lock, LockOpen, User, LogOut, Moon, Sun, GitFork, ChevronDown } from 'lucide-react';
-import { Tooltip } from '../ui';
+import { Database, Lock, LockOpen, User, LogOut, GitFork, ChevronDown } from 'lucide-react';
 import { useAppStore } from '../../stores/app-store';
-import { useThemeStore } from '../../hooks/useTheme';
 import { api } from '../../lib/api';
 
 const MODEL_OPTIONS: Record<string, { label: string; value: string }[]> = {
@@ -44,11 +42,9 @@ export function Header({ onOpenGraph, onLogin }: HeaderProps) {
     setModel,
   } = useAppStore();
 
-  const { theme, toggleTheme } = useThemeStore();
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Load current model on mount
   useEffect(() => {
     if (isAuthenticated && provider) {
       api.auth.getModel().then((res) => {
@@ -57,7 +53,6 @@ export function Header({ onOpenGraph, onLogin }: HeaderProps) {
     }
   }, [isAuthenticated, provider, setModel]);
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -67,10 +62,6 @@ export function Header({ onOpenGraph, onLogin }: HeaderProps) {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
-
-  const handleLogin = () => {
-    onLogin?.();
-  };
 
   const handleLogout = async () => {
     try {
@@ -95,81 +86,66 @@ export function Header({ onOpenGraph, onLogin }: HeaderProps) {
   const availableModels = provider ? MODEL_OPTIONS[provider] || [] : [];
 
   return (
-    <header className="h-12 bg-[var(--color-bg-card)] border-b border-[var(--color-border)] flex items-center px-4 gap-4 shrink-0">
-      {/* Logo */}
-      <div className="flex items-center gap-2">
-        <Database className="w-5 h-5 text-[var(--color-brand)]" />
-        <span className="font-semibold text-sm">AgentDB</span>
+    <header className="h-14 bg-[#000000] border-b border-white/10 flex items-center px-4 md:px-6 shrink-0 relative z-20">
+      <div className="flex items-center gap-2.5 group cursor-pointer min-w-[180px]">
+        <div className="w-8 h-8 rounded-xl bg-[#09090b] border border-white/10 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
+          <Database className="w-4 h-4 text-white" />
+        </div>
+        <span className="font-semibold text-lg tracking-tight text-white">AgentDB</span>
       </div>
 
-      {/* Connection Info */}
-      <div className="flex-1 flex items-center justify-center gap-3">
-        {connectionStatus === 'connected' && dbInfo ? (
-          <>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse-subtle" />
-              <span className="text-sm font-medium">{dbInfo.database}</span>
-              <span className="text-xs text-[var(--color-text-muted)]">({dbInfo.version})</span>
-            </div>
-            <span className="text-xs text-[var(--color-text-muted)]">
-              {dbInfo.tableCount} tabelas
-            </span>
-            {onOpenGraph && (
-              <Tooltip content="Ver grafo de relacoes">
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-full max-w-[430px] px-4 pointer-events-none hidden md:block">
+        <div className="bg-[#09090b] px-4 py-1.5 rounded-full flex items-center justify-center gap-3 border border-white/10 pointer-events-auto">
+          {connectionStatus === 'connected' && dbInfo ? (
+            <>
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span className="text-xs font-semibold tracking-wider text-text-primary uppercase">{dbInfo.database}</span>
+              </div>
+              <div className="w-px h-3 bg-white/10" />
+              <span className="text-[10px] font-medium tracking-wider text-text-secondary uppercase">
+                {dbInfo.tableCount} TABELAS
+              </span>
+              {onOpenGraph && (
                 <button
                   onClick={onOpenGraph}
-                  className="p-1 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-brand)] hover:bg-[var(--color-brand)]/10 transition-colors cursor-pointer"
+                  className="p-1 rounded-lg text-text-muted hover:text-white hover:bg-white/5 transition-all cursor-pointer"
                 >
                   <GitFork className="w-3.5 h-3.5" />
                 </button>
-              </Tooltip>
-            )}
-          </>
-        ) : connectionStatus === 'connecting' ? (
-          <span className="text-sm text-[var(--color-text-muted)] animate-pulse-subtle">
-            Conectando...
-          </span>
-        ) : (
-          <span className="text-sm text-[var(--color-text-muted)]">Nenhum banco conectado</span>
-        )}
+              )}
+            </>
+          ) : connectionStatus === 'connecting' ? (
+            <span className="text-xs font-medium text-text-secondary animate-pulse">ESTABELECENDO CONEXAO...</span>
+          ) : (
+            <span className="text-[10px] font-medium tracking-wider text-text-muted uppercase">NENHUM BANCO CONECTADO</span>
+          )}
+        </div>
       </div>
 
-      {/* Right side */}
-      <div className="flex items-center gap-2">
-        {/* Model Selector */}
+      <div className="flex items-center gap-3 ml-auto">
         {isAuthenticated && availableModels.length > 0 && (
           <div className="relative" ref={dropdownRef}>
-            <Tooltip content="Trocar modelo">
-              <button
-                onClick={() => setModelDropdownOpen((v) => !v)}
-                className={`
-                  flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium
-                  transition-colors duration-150 cursor-pointer
-                  ${provider === 'anthropic'
-                    ? 'bg-[#D97757]/10 text-[#D97757] border border-[#D97757]/20 hover:bg-[#D97757]/20'
-                    : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20'}
-                `}
-              >
-                {getModelLabel(model)}
-                <ChevronDown className={`w-3 h-3 transition-transform ${modelDropdownOpen ? 'rotate-180' : ''}`} />
-              </button>
-            </Tooltip>
+            <button
+              onClick={() => setModelDropdownOpen((v) => !v)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-bold tracking-wider uppercase transition-all duration-300 cursor-pointer border bg-[#09090b] text-white border-white/10 hover:bg-[#18181b] hover:border-white/30"
+            >
+              {getModelLabel(model)}
+              <ChevronDown className={`w-3 h-3 transition-transform duration-300 ${modelDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
 
             {modelDropdownOpen && (
-              <div className="absolute right-0 top-full mt-1 w-44 bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-lg shadow-lg z-50 py-1 animate-fadeIn">
+              <div className="absolute right-0 top-full mt-3 w-48 bg-[#09090b] rounded-xl shadow-2xl z-50 py-2 animate-fadeIn border border-white/10">
+                <div className="px-3 py-1 mb-1">
+                  <span className="text-[9px] font-black text-text-muted uppercase tracking-widest">Modelos Disponiveis</span>
+                </div>
                 {availableModels.map((opt) => (
                   <button
                     key={opt.value}
                     onClick={() => handleModelChange(opt.value)}
-                    className={`
-                      w-full text-left px-3 py-1.5 text-xs transition-colors cursor-pointer
-                      ${model === opt.value
-                        ? 'text-[var(--color-brand)] bg-[var(--color-brand)]/10 font-medium'
-                        : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-elevated)]'}
-                    `}
+                    className={`w-[calc(100%-16px)] mx-2 text-left px-3 py-2 text-xs rounded-lg transition-all cursor-pointer mb-0.5 ${model === opt.value ? 'bg-white text-black font-semibold' : 'text-text-secondary hover:text-white hover:bg-white/5'}`}
                   >
                     {opt.label}
-                    {model === opt.value && <span className="ml-1 text-[10px]">(ativo)</span>}
                   </button>
                 ))}
               </div>
@@ -177,56 +153,37 @@ export function Header({ onOpenGraph, onLogin }: HeaderProps) {
           </div>
         )}
 
-        {/* Read Only Toggle */}
-        <Tooltip content={readOnlyMode ? 'Modo somente leitura' : 'Modo escrita ativo'}>
-          <button
-            onClick={toggleReadOnly}
-            className={`
-              flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium
-              transition-colors duration-150 cursor-pointer
-              ${readOnlyMode
-                ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}
-            `}
-          >
-            {readOnlyMode ? <Lock className="w-3 h-3" /> : <LockOpen className="w-3 h-3" />}
-            {readOnlyMode ? 'READ' : 'WRITE'}
-          </button>
-        </Tooltip>
+        <button
+          onClick={toggleReadOnly}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-bold tracking-wider uppercase transition-all duration-300 cursor-pointer border ${readOnlyMode ? 'bg-[#09090b] text-white border-white/20 hover:bg-[#18181b]' : 'bg-white text-black border-white/20 hover:bg-gray-200'}`}
+        >
+          {readOnlyMode ? <Lock className="w-3.5 h-3.5" /> : <LockOpen className="w-3.5 h-3.5" />}
+          {readOnlyMode ? 'SOMENTE LEITURA' : 'MODO ESCRITA'}
+        </button>
 
-        {/* Theme Toggle */}
-        <Tooltip content={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}>
-          <button
-            onClick={toggleTheme}
-            className="p-1.5 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-elevated)] transition-colors cursor-pointer"
-          >
-            {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-          </button>
-        </Tooltip>
+        <div className="w-px h-6 bg-white/10 mx-1" />
 
-        {/* Auth */}
         {isAuthenticated ? (
           <div className="flex items-center gap-2">
-            <Tooltip content={`Logado: ${accountId || 'unknown'}`}>
-              <div className="flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)]">
-                <User className="w-3.5 h-3.5" />
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#09090b] border border-white/10">
+              <div className="w-5 h-5 rounded-full border border-white/20 bg-black flex items-center justify-center text-[10px] font-bold text-white uppercase px-1">
+                {accountId?.substring(0, 2) || 'AI'}
               </div>
-            </Tooltip>
-            <Tooltip content="Sair">
-              <button
-                onClick={handleLogout}
-                className="p-1 rounded-md text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-              </button>
-            </Tooltip>
+              <span className="text-xs font-semibold text-text-secondary">{accountId || 'Usuario'}</span>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="p-2 rounded-xl text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         ) : (
           <button
-            onClick={handleLogin}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-[var(--color-brand)] hover:bg-[var(--color-brand-hover)] text-white transition-colors cursor-pointer"
+            onClick={onLogin}
+            className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold tracking-wide bg-white text-black hover:bg-gray-200 transition-colors cursor-pointer"
           >
-            <User className="w-3.5 h-3.5" />
+            <User className="w-4 h-4" />
             Login
           </button>
         )}

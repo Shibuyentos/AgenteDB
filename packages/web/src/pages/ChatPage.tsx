@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
-import { Send, MessageSquare, Trash2 } from 'lucide-react';
+import { Send, MessageSquare, Trash2, Command, Sparkles } from 'lucide-react';
 import { ChatMessage } from '../components/chat/ChatMessage';
 import { MentionDropdown } from '../components/chat/MentionDropdown';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -8,20 +8,17 @@ import { useAppStore } from '../stores/app-store';
 
 export function ChatPage() {
   const connectionStatus = useAppStore((s) => s.connectionStatus);
-  const { messages, sendMessage, isConnected, clearMessages } = useWebSocket();
+  const { messages, sendMessage, clearMessages } = useWebSocket();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Mention autocomplete
   const mention = useMentionAutocomplete({ input, setInput, textareaRef });
 
-  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -37,9 +34,7 @@ export function ChatPage() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Let mention autocomplete consume keyboard events first
     if (mention.handleKeyDown(e)) return;
-
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       handleSend();
@@ -49,58 +44,56 @@ export function ChatPage() {
   const notConnected = connectionStatus !== 'connected';
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+    <div className="flex flex-col h-full bg-transparent relative">
+      <div className="flex-1 overflow-y-auto px-6 py-8 relative z-10">
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center animate-fadeIn">
-            <div className="w-16 h-16 rounded-2xl bg-brand/10 flex items-center justify-center mb-4">
-              <MessageSquare className="w-8 h-8 text-brand" />
+          <div className="flex flex-col items-center justify-center min-h-full text-center animate-fadeIn">
+            <div className="w-16 h-16 border border-white/10 rounded-2xl bg-[#09090b] flex items-center justify-center mb-8 shadow-subtle-inner">
+              <MessageSquare className="w-8 h-8 text-white" />
             </div>
-            <h2 className="text-lg font-semibold text-text-primary mb-2">
-              Converse com seu banco de dados
-            </h2>
-            <p className="text-sm text-text-muted max-w-md">
-              Faça perguntas em linguagem natural sobre a estrutura, dados e relações do seu banco.
-              O AgentDB vai gerar e executar queries automaticamente.
+
+            <h1 className="text-3xl font-semibold tracking-tight text-white mb-4">
+              AgentDB
+            </h1>
+
+            <p className="text-sm text-text-secondary max-w-md mb-12 leading-relaxed">
+              Converse com seu banco de dados. Faca perguntas em linguagem natural e receba queries otimizadas em milissegundos.
             </p>
 
             {notConnected && (
-              <div className="mt-6 px-4 py-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-                <p className="text-xs text-amber-400">
-                  Conecte a um banco de dados pela sidebar para começar.
+              <div className="mb-10 px-4 py-2 rounded-xl bg-[#09090b] border border-white/10">
+                <p className="text-xs text-text-secondary">
+                  Conecte a um banco de dados para comecar.
                 </p>
               </div>
             )}
 
-            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg w-full">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl w-full">
               {[
-                'Quais tabelas existem no banco?',
-                'Mostre os últimos 10 pedidos',
-                'Quais tabelas se relacionam com usuario?',
-                'Quantos registros tem cada tabela?',
-              ].map((suggestion) => (
+                { text: 'Quais tabelas existem no banco?', icon: <Sparkles className="w-3.5 h-3.5" /> },
+                { text: 'Mostre os ultimos 10 pedidos', icon: <Command className="w-3.5 h-3.5" /> },
+                { text: 'Quais tabelas se relacionam com usuario?', icon: <Sparkles className="w-3.5 h-3.5" /> },
+                { text: 'Quantos registros tem cada tabela?', icon: <Command className="w-3.5 h-3.5" /> },
+              ].map((item) => (
                 <button
-                  key={suggestion}
+                  key={item.text}
                   onClick={() => {
-                    setInput(suggestion);
+                    setInput(item.text);
                     textareaRef.current?.focus();
                   }}
                   disabled={notConnected}
-                  className="
-                    text-left px-3 py-2 rounded-lg text-xs text-text-secondary
-                    bg-bg-card border border-border hover:border-brand/30 hover:text-text-primary
-                    transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed
-                    cursor-pointer
-                  "
+                  className="group flex items-center gap-3 text-left px-4 py-3 rounded-xl text-[13px] font-medium bg-[#09090b] border border-white/10 hover:bg-[#18181b] hover:border-white/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
-                  {suggestion}
+                  <div className="w-7 h-7 rounded-lg bg-black border border-white/10 flex items-center justify-center text-text-muted group-hover:text-white transition-colors">
+                    {item.icon}
+                  </div>
+                  <span className="text-text-secondary group-hover:text-white transition-colors">{item.text}</span>
                 </button>
               ))}
             </div>
           </div>
         ) : (
-          <div className="space-y-4 max-w-4xl mx-auto">
+          <div className="space-y-8 max-w-4xl mx-auto pb-32">
             {messages.map((msg) => (
               <ChatMessage key={msg.id} message={msg} />
             ))}
@@ -110,22 +103,17 @@ export function ChatPage() {
       </div>
 
       {/* Input Area */}
-      <div className="shrink-0 border-t border-border bg-bg-card/50 backdrop-blur-sm px-6 py-3">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-end gap-2">
-            {messages.length > 0 && (
-              <button
-                onClick={clearMessages}
-                className="p-2 rounded-lg text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer shrink-0 mb-0.5"
-                title="Limpar chat"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-3xl px-6 z-20">
+        <div className="bg-[#09090b] border border-white/10 rounded-2xl shadow-2xl flex items-end gap-2 p-2 shadow-subtle-inner focus-within:border-white/30 transition-colors duration-300">
+          {messages.length > 0 && (
+            <button onClick={clearMessages} className="w-10 h-10 flex items-center justify-center rounded-xl text-text-muted hover:text-white hover:bg-white/5 transition-colors shrink-0">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
 
-            <div className="flex-1 relative">
-              {/* Mention Autocomplete Dropdown */}
-              {mention.isOpen && (
+          <div className="flex-1 relative">
+            {mention.isOpen && (
+              <div className="absolute bottom-full left-0 right-0 mb-4">
                 <MentionDropdown
                   items={mention.items}
                   selectedIndex={mention.selectedIndex}
@@ -133,55 +121,30 @@ export function ChatPage() {
                   listRef={mention.listRef}
                   query={mention.query}
                 />
-              )}
-
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={notConnected ? 'Conecte a um banco primeiro...' : 'Use @ para referenciar tabelas...'}
-                disabled={notConnected}
-                rows={1}
-                className="
-                  w-full bg-bg-base border border-border rounded-xl px-4 py-3 pr-12
-                  text-sm text-text-primary placeholder:text-text-muted
-                  focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand
-                  transition-all duration-150 resize-none
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                "
-              />
-              <button
-                onClick={handleSend}
-                disabled={notConnected || !input.trim()}
-                className="
-                  absolute right-2 bottom-2 p-2 rounded-lg
-                  bg-brand hover:bg-brand-hover text-white
-                  transition-colors duration-150 cursor-pointer
-                  disabled:opacity-30 disabled:cursor-not-allowed
-                "
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
+              </div>
+            )}
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={notConnected ? 'Conecte a um banco primeiro...' : 'Faca uma pergunta ao banco de dados...'}
+              disabled={notConnected}
+              rows={1}
+              className="w-full bg-transparent border-none px-4 py-3 text-[14px] text-white placeholder:text-text-muted focus:outline-none resize-none disabled:opacity-50"
+            />
           </div>
 
-          <div className="flex items-center justify-between mt-1.5 px-1">
-            <span className="text-[10px] text-text-muted">
-              Ctrl+Enter para enviar · <span className="text-brand/60">@</span> para mencionar tabelas
-            </span>
-            <div className="flex items-center gap-2">
-              {!isConnected && (
-                <span className="text-[10px] text-amber-400">WebSocket desconectado</span>
-              )}
-              {isConnected && (
-                <span className="text-[10px] text-emerald-400 flex items-center gap-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  Conectado
-                </span>
-              )}
-            </div>
-          </div>
+          <button
+            onClick={handleSend}
+            disabled={notConnected || !input.trim()}
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-black hover:bg-gray-200 transition-colors disabled:opacity-20 disabled:bg-white/10 disabled:text-white"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="text-center mt-3">
+          <span className="text-[10px] text-text-muted tracking-wide">Pressione <kbd className="font-mono bg-white/10 px-1 py-0.5 rounded border border-white/10">CTRL+ENTER</kbd> para enviar</span>
         </div>
       </div>
     </div>

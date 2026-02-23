@@ -25,30 +25,30 @@ export function BotAvatar({ variant = 'default' }: BotAvatarProps) {
   const provider = useAppStore((s) => s.provider);
 
   const isError = variant === 'error';
-  const bgClass = isError ? 'bg-red-500/10' : 'bg-bg-elevated';
+  const bgClass = isError ? 'bg-red-500/10 border-red-500/20' : 'bg-gradient-brand shadow-glow-sm ring-1 ring-white/20';
 
   if (provider === 'openai') {
-    const iconClass = isError ? 'w-3.5 h-3.5 text-red-400' : 'w-3.5 h-3.5 text-emerald-400';
+    const iconClass = isError ? 'w-4 h-4 text-red-400' : 'w-4 h-4 text-white p-0.5';
     return (
-      <div className={`w-7 h-7 rounded-full ${bgClass} flex items-center justify-center shrink-0 mt-1`}>
+      <div className={`w-10 h-10 rounded-2xl ${bgClass} border flex items-center justify-center shrink-0 mt-1 transition-transform group-hover:scale-110 duration-300`}>
         <OpenAIIcon className={iconClass} />
       </div>
     );
   }
 
   if (provider === 'anthropic') {
-    const iconClass = isError ? 'w-3.5 h-3.5 text-red-400' : 'w-3.5 h-3.5 text-[#D97757]';
+    const iconClass = isError ? 'w-4 h-4 text-red-400' : 'w-4 h-4 text-white p-0.5';
     return (
-      <div className={`w-7 h-7 rounded-full ${bgClass} flex items-center justify-center shrink-0 mt-1`}>
+      <div className={`w-10 h-10 rounded-2xl ${bgClass} border flex items-center justify-center shrink-0 mt-1 transition-transform group-hover:scale-110 duration-300`}>
         <AnthropicIcon className={iconClass} />
       </div>
     );
   }
 
   // Fallback
-  const iconClass = isError ? 'w-4 h-4 text-red-400' : 'w-4 h-4 text-brand';
+  const iconClass = isError ? 'w-5 h-5 text-red-400' : 'w-5 h-5 text-white';
   return (
-    <div className={`w-7 h-7 rounded-full ${bgClass} flex items-center justify-center shrink-0 mt-1`}>
+    <div className={`w-10 h-10 rounded-2xl ${bgClass} border flex items-center justify-center shrink-0 mt-1 transition-transform group-hover:scale-110 duration-300`}>
       <Bot className={iconClass} />
     </div>
   );
