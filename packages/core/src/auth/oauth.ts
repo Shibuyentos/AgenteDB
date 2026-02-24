@@ -2,6 +2,7 @@ import * as crypto from 'crypto';
 import * as http from 'http';
 import * as https from 'https';
 import * as readline from 'readline';
+import chalk from 'chalk';
 import { log } from '../utils/logger.js';
 import { getAuth, saveAuth } from '../utils/config.js';
 

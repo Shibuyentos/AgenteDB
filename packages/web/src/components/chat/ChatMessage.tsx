@@ -3,9 +3,27 @@ import { SQLBlock } from './SQLBlock';
 import { ResultTable } from './ResultTable';
 import { BotAvatar } from './BotAvatar';
 import type { ChatMessage as ChatMessageType } from '../../types';
+import { useAppStore } from '../../stores/app-store';
 
 interface ChatMessageProps {
   message: ChatMessageType;
+}
+
+function AnthropicSpinner() {
+  return (
+    <div className="anthropic-spinner" aria-hidden="true">
+      {Array.from({ length: 12 }).map((_, i) => (
+        <span
+          key={i}
+          className="anthropic-spinner-ray"
+          style={{
+            transform: `translate(-50%, -50%) rotate(${i * 30}deg) translateY(-5px)`,
+            animationDelay: `${i * -0.1}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
 }
 
 function formatInline(text: string): React.ReactNode[] {
@@ -75,6 +93,8 @@ function formatMarkdown(content: string): React.ReactNode[] {
 }
 
 export const ChatMessage = memo(function ChatMessage({ message }: ChatMessageProps) {
+  const provider = useAppStore((s) => s.provider);
+
   const formattedContent = useMemo(() => {
     if (message.content) {
       return formatMarkdown(message.content);
@@ -93,15 +113,21 @@ export const ChatMessage = memo(function ChatMessage({ message }: ChatMessagePro
   }
 
   if (message.type === 'thinking' || message.type === 'executing') {
+    const isAnthropic = provider === 'anthropic';
+
     return (
       <div className="flex items-center gap-3 text-sm text-text-secondary">
         <BotAvatar />
         <div className="flex items-center gap-2">
-          <div className="flex gap-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce" style={{ animationDelay: '0ms' }} />
-            <div className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce" style={{ animationDelay: '150ms' }} />
-            <div className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce" style={{ animationDelay: '300ms' }} />
-          </div>
+          {isAnthropic ? (
+            <AnthropicSpinner />
+          ) : (
+            <div className="flex gap-1">
+              <div className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce" style={{ animationDelay: '0ms' }} />
+              <div className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce" style={{ animationDelay: '150ms' }} />
+              <div className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+          )}
           <span className="text-xs font-medium text-text-muted">
             {message.type === 'thinking' ? 'Pensando...' : 'Executando query...'}
           </span>

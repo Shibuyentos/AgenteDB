@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { Database, Lock, LockOpen, User, LogOut, GitFork, ChevronDown } from 'lucide-react';
 import { useAppStore } from '../../stores/app-store';
 import { api } from '../../lib/api';
+import { OpenAIIcon } from '../icons/OpenAIIcon';
+import { AnthropicIcon } from '../icons/AnthropicIcon';
 
 type ProviderId = 'openai' | 'anthropic';
 
@@ -118,7 +120,13 @@ export const Header = memo(function Header({ onOpenGraph, onLogin }: HeaderProps
     <header className="h-14 bg-[#000000] border-b border-white/10 flex items-center px-4 md:px-6 shrink-0 relative z-20">
       <div className="flex items-center gap-2.5 group cursor-pointer min-w-[180px]">
         <div className="w-8 h-8 rounded-xl bg-[#09090b] border border-white/10 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
-          <Database className="w-4 h-4 text-white" />
+          {provider === 'openai' ? (
+            <OpenAIIcon className="w-4 h-4 text-white" />
+          ) : provider === 'anthropic' ? (
+            <AnthropicIcon className="w-4 h-4 text-white" />
+          ) : (
+            <Database className="w-4 h-4 text-white" />
+          )}
         </div>
         <span className="font-semibold text-lg tracking-tight text-white">Shibuy.ai</span>
       </div>
